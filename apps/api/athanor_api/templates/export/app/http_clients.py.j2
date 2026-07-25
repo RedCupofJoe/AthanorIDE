@@ -1,0 +1,32 @@
+"""Generated HTTP client stubs from foundation.http_request nodes."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+{% for item in http_clients %}
+
+def call_{{ item.node_id | replace('-', '_') }}(body: str | None = None) -> str:
+    """{{ item.name }} — {{ item.method }} {{ item.url }}"""
+
+    timeout = httpx.Timeout({{ item.timeout_seconds }})
+    with httpx.Client(timeout=timeout) as client:
+        response = client.request(
+            "{{ item.method }}",
+            "{{ item.url }}",
+            content=body.encode("utf-8") if body is not None else None,
+            headers={"content-type": "text/plain"} if body is not None else None,
+        )
+        response.raise_for_status()
+        return response.text
+
+{% endfor %}
+
+
+CLIENTS: dict[str, Any] = {
+{% for item in http_clients %}
+    "{{ item.node_id }}": call_{{ item.node_id | replace('-', '_') }},
+{% endfor %}
+}

@@ -1,0 +1,15 @@
+# Node catalog
+
+Generated documentation for every node present in the exported architecture graph.
+
+{% for item in catalog_nodes %}
+## {{ item.name }}
+
+- Type: `{{ item.node_type }}`
+- Category: `{{ item.category }}`
+- Export kind: `{{ item.export_kind }}`
+- Node id: `{{ item.node_id }}`
+
+{{ item.documentation }}
+
+{% endfor %}

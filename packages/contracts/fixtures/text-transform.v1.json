@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": {
+    "id": "proj-text-transform-001",
+    "name": "Text Transformation Example",
+    "description": "Minimal three-node pipeline placeholder for Phase 1.",
+    "createdAt": "2026-07-24T14:00:00.000Z",
+    "updatedAt": "2026-07-24T14:00:00.000Z"
+  },
+  "nodes": [
+    {
+      "id": "node-text-input-01",
+      "type": "foundation.text_input",
+      "version": "1.0.0",
+      "name": "Text Input",
+      "position": { "x": 0, "y": 0 },
+      "configuration": { "value": "hello" },
+      "inputs": [],
+      "outputs": [
+        {
+          "id": "out-text",
+          "name": "text",
+          "direction": "output",
+          "contractType": "STRING",
+          "required": true,
+          "multiple": false
+        }
+      ]
+    },
+    {
+      "id": "node-python-transform-01",
+      "type": "foundation.python_transform",
+      "version": "1.0.0",
+      "name": "Python Transformation",
+      "position": { "x": 280, "y": 0 },
+      "configuration": { "instruction": "uppercase the input" },
+      "inputs": [
+        {
+          "id": "in-text",
+          "name": "text",
+          "direction": "input",
+          "contractType": "STRING",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": [
+        {
+          "id": "out-text",
+          "name": "text",
+          "direction": "output",
+          "contractType": "STRING",
+          "required": true,
+          "multiple": false
+        }
+      ]
+    },
+    {
+      "id": "node-output-viewer-01",
+      "type": "foundation.output_viewer",
+      "version": "1.0.0",
+      "name": "Output Viewer",
+      "position": { "x": 560, "y": 0 },
+      "configuration": {},
+      "inputs": [
+        {
+          "id": "in-text",
+          "name": "text",
+          "direction": "input",
+          "contractType": "STRING",
+          "required": true,
+          "multiple": false
+        }
+      ],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "sourceNodeId": "node-text-input-01",
+      "sourcePortId": "out-text",
+      "targetNodeId": "node-python-transform-01",
+      "targetPortId": "in-text"
+    },
+    {
+      "id": "edge-2",
+      "sourceNodeId": "node-python-transform-01",
+      "sourcePortId": "out-text",
+      "targetNodeId": "node-output-viewer-01",
+      "targetPortId": "in-text"
+    }
+  ],
+  "contracts": [],
+  "deploymentEnvironments": [],
+  "macroBlocks": [],
+  "portalBuses": [],
+  "validationResults": [],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  }
+}

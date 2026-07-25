@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": {
+    "id": "proj-empty-001",
+    "name": "Empty Project",
+    "createdAt": "2026-07-24T14:00:00.000Z",
+    "updatedAt": "2026-07-24T14:00:00.000Z"
+  },
+  "nodes": [],
+  "edges": [],
+  "contracts": [],
+  "deploymentEnvironments": [],
+  "macroBlocks": [],
+  "portalBuses": [],
+  "validationResults": [],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  }
+}

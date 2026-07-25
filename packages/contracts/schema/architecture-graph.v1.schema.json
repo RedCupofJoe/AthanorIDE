@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://athanor.dev/schemas/architecture-graph/v1.json",
+  "title": "AthanorIDE Architecture Graph",
+  "description": "Canonical persisted project document for AthanorIDE. Schema version 1.0.0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "project", "nodes", "edges", "viewport"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "project": {
+      "$ref": "#/$defs/ProjectMetadata"
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ArchitectureNode" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ArchitectureEdge" }
+    },
+    "contracts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/DataContract" },
+      "default": []
+    },
+    "deploymentEnvironments": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/DeploymentEnvironment" },
+      "default": []
+    },
+    "macroBlocks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/MacroBlock" },
+      "default": []
+    },
+    "portalBuses": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/PortalBus" },
+      "default": []
+    },
+    "validationResults": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ValidationIssue" },
+      "default": []
+    },
+    "exportConfiguration": {
+      "$ref": "#/$defs/ExportConfiguration"
+    },
+    "viewport": {
+      "$ref": "#/$defs/Viewport"
+    }
+  },
+  "$defs": {
+    "ProjectMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "ContractType": {
+      "type": "string",
+      "enum": [
+        "STRING",
+        "PROMPT",
+        "MODEL_HANDLE",
+        "MODEL_WEIGHTS",
+        "VECTOR_EMBEDDING",
+        "DATABASE_HANDLE",
+        "TOOL_DEFINITION",
+        "MCP_SERVER",
+        "STREAMING_PAYLOAD",
+        "JSON_SCHEMA",
+        "IMAGE",
+        "VIDEO",
+        "AUDIO",
+        "TENSOR",
+        "FILE_REFERENCE",
+        "DATASET",
+        "EVENT",
+        "ANY"
+      ]
+    },
+    "NodePort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "direction", "contractType", "required", "multiple"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "direction": { "type": "string", "enum": ["input", "output"] },
+        "contractType": { "$ref": "#/$defs/ContractType" },
+        "required": { "type": "boolean" },
+        "multiple": { "type": "boolean" },
+        "schema": { "type": "object" }
+      }
+    },
+    "ArchitectureNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "version",
+        "name",
+        "position",
+        "configuration",
+        "inputs",
+        "outputs"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "position": { "$ref": "#/$defs/Position" },
+        "configuration": { "type": "object" },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NodePort" }
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NodePort" }
+        },
+        "deploymentTarget": { "type": "string" },
+        "parentMacroId": { "type": "string" },
+        "metadata": { "type": "object" }
+      }
+    },
+    "ArchitectureEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sourceNodeId",
+        "sourcePortId",
+        "targetNodeId",
+        "targetPortId"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sourceNodeId": { "type": "string", "minLength": 1 },
+        "sourcePortId": { "type": "string", "minLength": 1 },
+        "targetNodeId": { "type": "string", "minLength": 1 },
+        "targetPortId": { "type": "string", "minLength": 1 },
+        "metadata": { "type": "object" }
+      }
+    },
+    "DataContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "contractType", "name"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "contractType": { "$ref": "#/$defs/ContractType" },
+        "name": { "type": "string", "minLength": 1 },
+        "schema": { "type": "object" },
+        "metadata": { "type": "object" }
+      }
+    },
+    "DeploymentEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "LOCAL_WORKSTATION",
+            "ON_PREMISES",
+            "OPENSHIFT",
+            "KUBERNETES",
+            "AWS_GPU",
+            "GCP_CLOUD_RUN",
+            "AZURE_CONTAINER_APPS",
+            "EDGE_DEVICE",
+            "RASPBERRY_PI",
+            "AIR_GAPPED_ENVIRONMENT"
+          ]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "width": { "type": "number" },
+            "height": { "type": "number" }
+          }
+        },
+        "metadata": { "type": "object" }
+      }
+    },
+    "MacroBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "nodeIds", "inputs", "outputs"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "nodeIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NodePort" }
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NodePort" }
+        },
+        "collapsed": { "type": "boolean", "default": true },
+        "metadata": { "type": "object" }
+      }
+    },
+    "PortalBus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "busId", "displayName", "contractType", "scope"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "busId": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "contractType": { "$ref": "#/$defs/ContractType" },
+        "scope": {
+          "type": "string",
+          "enum": ["project", "macro", "deployment"]
+        },
+        "scopeId": { "type": "string" },
+        "metadata": { "type": "object" }
+      }
+    },
+    "ValidationIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "severity", "code", "message"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "error"]
+        },
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "nodeId": { "type": ["string", "null"] },
+        "edgeId": { "type": ["string", "null"] },
+        "suggestedAction": { "type": ["string", "null"] }
+      }
+    },
+    "ExportConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectSlug": { "type": "string" },
+        "includeDockerCompat": { "type": "boolean", "default": false },
+        "includeKubernetes": { "type": "boolean", "default": false },
+        "includeOpenShift": { "type": "boolean", "default": false },
+        "includeTerraform": { "type": "boolean", "default": false },
+        "metadata": { "type": "object" }
+      }
+    },
+    "Viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "zoom"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "zoom": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

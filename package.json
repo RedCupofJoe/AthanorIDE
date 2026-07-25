@@ -1,0 +1,16 @@
+{
+  "name": "athanor-ide",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @athanor/web --filter @athanor/contracts dev",
+    "dev:web": "pnpm --filter @athanor/web dev",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm -r --if-present build"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

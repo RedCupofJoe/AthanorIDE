@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --athanor-ink: #1c1917;
+  --athanor-paper: #f5f0e8;
+  --athanor-ember: #c2410c;
+  --athanor-slate: #44403c;
+  --athanor-mist: #e7e5e4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  color: var(--athanor-ink);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(194, 65, 12, 0.12), transparent 42%),
+    linear-gradient(165deg, #faf7f2 0%, var(--athanor-paper) 45%, #ebe4d8 100%);
+  min-height: 100vh;
+}
+
+/* React Flow canvas fills editor chrome without inheriting page gradient noise */
+.react-flow {
+  background: #f7f3ec;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.react-flow__handle {
+  z-index: 5;
+}
+
+.react-flow__handle-connecting {
+  cursor: crosshair;
+}
+
