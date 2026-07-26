@@ -213,3 +213,64 @@ class CompilerValidateResponse(BaseModel):
     duration_ms: float = Field(alias="durationMs")
 
     model_config = {"populate_by_name": True}
+
+
+# --- Local vault ---
+
+
+class VaultStatusResponse(BaseModel):
+    exists: bool
+    unlocked: bool
+    entry_count: int | None = Field(default=None, alias="entryCount")
+    unlocked_until: float | None = Field(default=None, alias="unlockedUntil")
+
+    model_config = {"populate_by_name": True}
+
+
+class VaultPassphraseRequest(BaseModel):
+    passphrase: str
+
+
+class VaultEntryMeta(BaseModel):
+    id: str
+    name: str
+    updated_at: str = Field(alias="updatedAt")
+    has_value: bool = Field(alias="hasValue")
+
+    model_config = {"populate_by_name": True}
+
+
+class VaultEntriesResponse(BaseModel):
+    items: list[VaultEntryMeta]
+
+
+class VaultPutEntryRequest(BaseModel):
+    value: str
+    notes: str | None = None
+
+
+class VaultCoverageRequest(BaseModel):
+    graph: ArchitectureGraph | None = None
+    names: list[str] | None = None
+
+
+class VaultCoverageResponse(BaseModel):
+    unlocked: bool
+    requested: list[str]
+    present: list[str]
+    missing: list[str]
+
+
+class VaultMaterializeRequest(BaseModel):
+    path: str
+    graph: ArchitectureGraph | None = None
+    names: list[str] | None = None
+
+
+class VaultMaterializeResponse(BaseModel):
+    path: str
+    written_count: int = Field(alias="writtenCount")
+    written_names: list[str] = Field(alias="writtenNames")
+    missing: list[str]
+
+    model_config = {"populate_by_name": True}

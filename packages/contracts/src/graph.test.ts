@@ -47,4 +47,21 @@ describe("architecture graph contracts", () => {
     expect(validate(document)).toBe(false);
     expect(ArchitectureGraphSchema.safeParse(document).success).toBe(false);
   });
+
+  it("defaults missing infrastructureTokens to an empty array", () => {
+    const document = {
+      schemaVersion: SCHEMA_VERSION,
+      project: {
+        id: "p1",
+        name: "Demo",
+        createdAt: "2026-07-24T14:00:00.000Z",
+        updatedAt: "2026-07-24T14:00:00.000Z",
+      },
+      nodes: [],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    };
+    const parsed = parseArchitectureGraph(document);
+    expect(parsed.infrastructureTokens).toEqual([]);
+  });
 });

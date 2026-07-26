@@ -16,6 +16,7 @@ ADRs document durable technical decisions for AthanorIDE.
 | [0008](./0008-catalog-expansion.md) | Vision / Multi-agent / Enterprise Catalog | Accepted |
 | [0009](./0009-multi-project-library.md) | Multi-project Local Library | Accepted |
 | [0010](./0010-big-blocks.md) | Big Blocks Opinionated Composites | Accepted |
+| [0011](./0011-local-secrets-vault.md) | Local Secrets Vault | Accepted |
 
 ## Template
 

@@ -24,6 +24,9 @@ BIG_BLOCK_TYPES = (
     "big_blocks.audio_to_rag",
     "big_blocks.multimodal_rag",
     "big_blocks.video_chunking_ic_lora",
+    "big_blocks.web_to_markdown",
+    "big_blocks.postgres_pgvector",
+    "big_blocks.guardrail_builder",
 )
 
 
@@ -95,7 +98,26 @@ def test_catalog_includes_all_big_blocks() -> None:
         assert node_type in by_type
         assert by_type[node_type].export_kind == "big_blocks"
         assert by_type[node_type].category == "big-blocks"
-    assert len([t for t in by_type if t.startswith("big_blocks.")]) == 15
+    assert len([t for t in by_type if t.startswith("big_blocks.")]) == 18
+
+
+def test_guardrail_builder_required_config() -> None:
+    entry = next(e for e in NODE_CATALOG if e.type == "big_blocks.guardrail_builder")
+    assert entry.required_config == (
+        "openSourceStack",
+        "systemPromptPosture",
+        "policySourceUri",
+        "embeddingModel",
+        "vectorStore",
+        "maxDocuments",
+        "chunkSize",
+        "chunkOverlap",
+        "generationModelId",
+        "includeCitations",
+        "deploymentMode",
+        "cloudProvider",
+        "useCustomTemplate",
+    )
 
 
 def test_agentic_harness_required_config_order() -> None:

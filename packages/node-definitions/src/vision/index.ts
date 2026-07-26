@@ -4,7 +4,8 @@ import { portTemplate, type NodeDefinition } from "../types.js";
 export const imageInputDefinition: NodeDefinition = {
   type: "vision.image_input",
   displayName: "Image Input",
-  description: "Provides a static image path or URI for vision pipelines.",
+  description:
+    "Image Input is the vision pipeline source that declares a static image path or URI as an IMAGE output. Set path and MIME type in the inspector, then connect into preprocessors, vision models, or multimodal Big Blocks. It keeps the visual asset explicit in the architecture instead of implying images only in prose.",
   category: "vision",
   version: "1.0.0",
   icon: "image",
@@ -31,13 +32,14 @@ export const imageInputDefinition: NodeDefinition = {
     },
   ],
   documentation:
-    "Image Input declares vision source lineage. Export documents the path and MIME type; decoding runs outside the IDE.",
+    "Best used for demos, golden fixtures, and documenting which assets a vision flow expects. The IDE does not decode pixels—export records path and MIME for out-of-band runtimes. Prefer multimodal UI or dataset loaders when images arrive dynamically from users or batches.",
 };
 
 export const imagePreprocessorDefinition: NodeDefinition = {
   type: "vision.image_preprocessor",
   displayName: "Image Preprocessor",
-  description: "Configures resize and format normalization for an image stream.",
+  description:
+    "Image Preprocessor sits between IMAGE producers and consumers to declare resize, fit, and output format. Connect an Image Input or other IMAGE source, configure width/height/fit, and pass the normalized IMAGE downstream to Vision Model or classifiers. It makes preprocessing policy visible before inference.",
   category: "vision",
   version: "1.0.0",
   icon: "scan",
@@ -81,13 +83,14 @@ export const imagePreprocessorDefinition: NodeDefinition = {
     },
   ],
   documentation:
-    "Image Preprocessor captures resize/format intent for export. It does not transform pixels inside the IDE.",
+    "Use it when models require fixed geometry or when you want export docs to capture preprocessing contracts. Pixel transforms do not run in the IDE; this node is lineage for deployed pipelines. Skip it for architectures that already normalize images inside a Vision Model or Big Block stack.",
 };
 
 export const visionModelDefinition: NodeDefinition = {
   type: "vision.vision_model",
   displayName: "Vision Model",
-  description: "Runs a vision model (caption, OCR, or VLM) over an image input.",
+  description:
+    "Vision Model declares a caption, OCR, VQA, or classify task over an IMAGE input with an optional PROMPT. Connect Image Input/Preprocessor and optionally Prompt Template, set modelId and task, and take STRING text out. It documents which vision capability the architecture depends on.",
   category: "vision",
   version: "1.0.0",
   icon: "scan-eye",
@@ -125,7 +128,7 @@ export const visionModelDefinition: NodeDefinition = {
     },
   ],
   documentation:
-    "Vision Model declares inference lineage (model, task, token budget). Inference is out of band for this catalog slice.",
+    "Best used in fine-grained graphs where you want an explicit vision hop before agents or RAG. Inference is out of band—IDE Run skips lineage vision nodes. Prefer Image Classifier or Multimodal-RAG Big Blocks when you want an opinionated multi-tech composite instead of wiring atomic vision nodes.",
 };
 
 export const VISION_NODE_DEFINITIONS: readonly NodeDefinition[] = [

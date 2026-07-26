@@ -110,6 +110,56 @@ export const DeploymentEnvironmentKindSchema = z.enum([
   "AIR_GAPPED_ENVIRONMENT",
 ]);
 
+export const InfrastructureTokenKindSchema = z.enum([
+  "huggingface",
+  "kaggle",
+  "docker",
+  "github",
+  "uci_ml",
+  "pytorch_hub",
+  "custom",
+]);
+
+export type InfrastructureTokenKind = z.infer<typeof InfrastructureTokenKindSchema>;
+
+export const InfrastructureTokenSlotSchema = z.object({
+  id: z.string().min(1),
+  kind: InfrastructureTokenKindSchema,
+  label: z.string().min(1),
+  /** Secret name only — never the token value. */
+  secretName: z.string(),
+  provider: z.enum(["env", "file", "vault", "cloud_secret_manager"]).default("env"),
+  recommendedEnvName: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export type InfrastructureTokenSlot = z.infer<typeof InfrastructureTokenSlotSchema>;
+
+/** Built-in infrastructure pull-token providers shown by default. */
+export const DEFAULT_INFRASTRUCTURE_TOKEN_KINDS = [
+  { kind: "huggingface", label: "Hugging Face", recommendedEnvName: "HF_TOKEN" },
+  { kind: "kaggle", label: "Kaggle", recommendedEnvName: "KAGGLE_KEY" },
+  { kind: "docker", label: "Docker Hub", recommendedEnvName: "DOCKERHUB_TOKEN" },
+  { kind: "github", label: "GitHub", recommendedEnvName: "GITHUB_TOKEN" },
+  { kind: "uci_ml", label: "UCI Machine Learning", recommendedEnvName: "UCI_ML_TOKEN" },
+  { kind: "pytorch_hub", label: "PyTorch Hub", recommendedEnvName: "PYTORCH_HUB_TOKEN" },
+] as const satisfies ReadonlyArray<{
+  kind: Exclude<InfrastructureTokenKind, "custom">;
+  label: string;
+  recommendedEnvName: string;
+}>;
+
+export function createDefaultInfrastructureTokens(): InfrastructureTokenSlot[] {
+  return DEFAULT_INFRASTRUCTURE_TOKEN_KINDS.map((item) => ({
+    id: `infra-token-${item.kind}`,
+    kind: item.kind,
+    label: item.label,
+    secretName: "",
+    provider: "env" as const,
+    recommendedEnvName: item.recommendedEnvName,
+  }));
+}
+
 export const ArchitectureGraphSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   project: ProjectMetadataSchema,
@@ -171,6 +221,7 @@ export const ArchitectureGraphSchema = z.object({
       }),
     )
     .default([]),
+  infrastructureTokens: z.array(InfrastructureTokenSlotSchema).default([]),
   validationResults: z.array(ValidationIssueSchema).default([]),
   exportConfiguration: z
     .object({
@@ -228,6 +279,7 @@ export function createEmptyGraph(name = "Untitled Project"): ArchitectureGraph {
     deploymentEnvironments: [],
     macroBlocks: [],
     portalBuses: [],
+    infrastructureTokens: createDefaultInfrastructureTokens(),
     validationResults: [],
     viewport: { x: 0, y: 0, zoom: 1 },
   };

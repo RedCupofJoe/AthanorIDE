@@ -2,6 +2,8 @@
 {% for node_id in source_node_trace -%}
 # - {{ node_id }}
 {% endfor %}
+# Local secrets: create .env via AthanorIDE Local vault → Materialize .env
+# (never commit .env; export ZIPs only include .env.example).
 services:
   app:
     build:
@@ -9,6 +11,9 @@ services:
       dockerfile: Containerfile
     ports:
       - "8080:8080"
+    env_file:
+      - path: .env
+        required: false
     environment:
       APP_NAME: {{ project_slug }}
       DEFAULT_TEXT: {{ default_text | tojson }}

@@ -24,6 +24,8 @@
 4. Logs use correlation IDs and must not record credentials, secret material, or sensitive payloads.
 5. Export emits `.env.example`, never `.env` with real secrets.
 6. Compiler correction loops are bounded and every attempt is written to an audit record.
+7. Project **infrastructure pull tokens** store secret **names** only (Hugging Face, Kaggle, Docker, GitHub, UCI ML, PyTorch Hub, plus custom slots). Per-node `tokenSecretName` fields remain for service-specific credentials.
+8. The **local vault** (API-encrypted, passphrase-locked) may store secret **values** for local runs only. Values are never written into the architecture graph or export ZIPs; use Materialize `.env` for compose / run-local. See [ADR 0011](./decisions/0011-local-secrets-vault.md).
 
 ## Phase 3 compiler sandbox defaults
 

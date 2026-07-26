@@ -42,6 +42,10 @@ import {
   Video,
   WandSparkles,
   Wrench,
+  FileText,
+  Cylinder,
+  Boxes,
+  BadgeCheck,
 } from "lucide-react";
 
 import { PortRow } from "@/components/nodes/PortRow";
@@ -93,6 +97,10 @@ const ICONS = {
   headphones: Headphones,
   layers: Layers,
   clapperboard: Clapperboard,
+  "file-text": FileText,
+  cylinder: Cylinder,
+  boxes: Boxes,
+  "badge-check": BadgeCheck,
 } as const;
 
 function healthDot(health: ArchitectureFlowNodeData["health"]): string {

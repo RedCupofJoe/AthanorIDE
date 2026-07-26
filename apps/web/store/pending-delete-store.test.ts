@@ -23,6 +23,7 @@ describe("pending delete store", () => {
         deploymentEnvironments: [],
         macroBlocks: [],
         portalBuses: [],
+        infrastructureTokens: [],
         validationResults: [],
         viewport: { x: 0, y: 0, zoom: 1 },
       },

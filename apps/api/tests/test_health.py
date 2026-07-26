@@ -25,4 +25,4 @@ def test_node_definitions_empty(client: TestClient) -> None:
     assert "foundation.text_input" in types
     assert "foundation.portal_input" in types
     assert "fine_tuning.lora_trainer" in types
-    assert len(types) == 36
+    assert len(types) == 39

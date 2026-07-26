@@ -3,9 +3,16 @@
 {% for node_id in source_node_trace -%}
 # - {{ node_id }}
 {% endfor %}
+# Optional: materialize secrets with AthanorIDE Local vault into ./.env first.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source ./.env
+  set +a
+fi
 python -m venv .venv
 # shellcheck disable=SC1091
 source .venv/bin/activate

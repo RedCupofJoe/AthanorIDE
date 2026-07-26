@@ -185,7 +185,7 @@ Tooling bootstrap installs project-local `pnpm` and `uv` under `.tools/` so host
 
 ### Definition of done
 
-- [x] Category `big-blocks` with 15 composite node types
+- [x] Category `big-blocks` with 18 composite node types
 - [x] Shared OSS stack + local/hybrid/cloud + URI + tokenSecretName + customTemplate fields
 - [x] Mirrored Python catalog, export lineage, IDE Run skip, secret-embedding validation
 - [x] Palette section + docs/ADR 0010

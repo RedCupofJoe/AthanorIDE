@@ -94,6 +94,15 @@ class SecretReferenceStep:
 
 
 @dataclass(frozen=True)
+class InfrastructureTokenStep:
+    slot_id: str
+    kind: str
+    label: str
+    secret_name: str
+    provider: str
+
+
+@dataclass(frozen=True)
 class FineTuningStep:
     node_id: str
     name: str
@@ -138,6 +147,7 @@ class ExportIR:
     http_clients: list[HttpClientStep]
     env_bindings: list[EnvBindingStep]
     secret_references: list[SecretReferenceStep]
+    infrastructure_tokens: list[InfrastructureTokenStep]
     fine_tuning: list[FineTuningStep]
     vision: list[LineageStep]
     multi_agent: list[LineageStep]
@@ -472,6 +482,17 @@ def build_export_ir(
         http_clients=http_clients,
         env_bindings=env_bindings,
         secret_references=secret_references,
+        infrastructure_tokens=[
+            InfrastructureTokenStep(
+                slot_id=slot.id,
+                kind=slot.kind,
+                label=slot.label,
+                secret_name=slot.secret_name,
+                provider=slot.provider,
+            )
+            for slot in graph.infrastructure_tokens
+            if slot.secret_name.strip()
+        ],
         fine_tuning=fine_tuning,
         vision=vision,
         multi_agent=multi_agent,

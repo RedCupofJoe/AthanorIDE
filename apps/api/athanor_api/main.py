@@ -42,6 +42,7 @@ from athanor_api.schemas.api import (
 from athanor_api.schemas.graph import SCHEMA_VERSION
 from athanor_api.settings import settings
 from athanor_api.validation import validate_architecture_graph
+from athanor_api.vault.routes import router as vault_router
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -61,6 +62,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(vault_router)
 
 
 @app.middleware("http")

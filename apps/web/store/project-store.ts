@@ -3,11 +3,13 @@
  * Owns undo/redo history, graph mutations, and debounced local persistence.
  */
 import {
+  createDefaultInfrastructureTokens,
   createEmptyGraph,
   newId,
   type ArchitectureEdge,
   type ArchitectureGraph,
   type ArchitectureNode,
+  type InfrastructureTokenSlot,
 } from "@athanor/contracts";
 import { createNodeFromDefinition } from "@athanor/node-definitions";
 import { create } from "zustand";
@@ -39,6 +41,7 @@ interface HistorySnapshot {
   portalBuses: ArchitectureGraph["portalBuses"];
   deploymentEnvironments: ArchitectureGraph["deploymentEnvironments"];
   exportConfiguration: ArchitectureGraph["exportConfiguration"];
+  infrastructureTokens: ArchitectureGraph["infrastructureTokens"];
 }
 
 interface ProjectStore {
@@ -65,6 +68,9 @@ interface ProjectStore {
   setExportConfiguration: (
     patch: Partial<NonNullable<ArchitectureGraph["exportConfiguration"]>>,
   ) => void;
+  setInfrastructureTokens: (tokens: InfrastructureTokenSlot[]) => void;
+  upsertInfrastructureToken: (slot: InfrastructureTokenSlot) => void;
+  removeInfrastructureToken: (slotId: string) => void;
   deleteSelection: (nodeIds: string[], edgeIds: string[]) => void;
   connectPorts: (params: {
     sourceNodeId: string;
@@ -109,6 +115,16 @@ function withPortalSync(graph: ArchitectureGraph): ArchitectureGraph {
   };
 }
 
+function ensureInfrastructureTokens(graph: ArchitectureGraph): ArchitectureGraph {
+  if (graph.infrastructureTokens && graph.infrastructureTokens.length > 0) {
+    return graph;
+  }
+  return {
+    ...graph,
+    infrastructureTokens: createDefaultInfrastructureTokens(),
+  };
+}
+
 function snapshotOf(graph: ArchitectureGraph): HistorySnapshot {
   return {
     nodes: structuredClone(graph.nodes),
@@ -117,6 +133,7 @@ function snapshotOf(graph: ArchitectureGraph): HistorySnapshot {
     portalBuses: structuredClone(graph.portalBuses),
     deploymentEnvironments: structuredClone(graph.deploymentEnvironments),
     exportConfiguration: structuredClone(graph.exportConfiguration),
+    infrastructureTokens: structuredClone(graph.infrastructureTokens ?? []),
   };
 }
 
@@ -132,6 +149,7 @@ function applySnapshot(
     portalBuses: snapshot.portalBuses,
     deploymentEnvironments: snapshot.deploymentEnvironments,
     exportConfiguration: snapshot.exportConfiguration,
+    infrastructureTokens: snapshot.infrastructureTokens,
   });
 }
 
@@ -176,7 +194,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       if (loaded) {
         setActiveProjectId(loaded.project.id);
         set({
-          graph: withPortalSync(loaded),
+          graph: ensureInfrastructureTokens(withPortalSync(loaded)),
           hydrated: true,
           past: [],
           future: [],
@@ -194,7 +212,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     if (persisted) {
       setActiveProjectId(persisted.project.id);
       set({
-        graph: withPortalSync(persisted),
+        graph: ensureInfrastructureTokens(withPortalSync(persisted)),
         hydrated: true,
         past: [],
         future: [],
@@ -212,7 +230,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     if (!loaded) return false;
     setActiveProjectId(loaded.project.id);
     set({
-      graph: withPortalSync(loaded),
+      graph: ensureInfrastructureTokens(withPortalSync(loaded)),
       hydrated: true,
       past: [],
       future: [],
@@ -238,7 +256,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       const history = recordHistory
         ? pushHistory(state)
         : { past: state.past, future: state.future };
-      const next = touch(withPortalSync(graph));
+      const next = touch(ensureInfrastructureTokens(withPortalSync(graph)));
       schedulePersist(next);
       return { ...history, graph: next, connectionError: null };
     });
@@ -353,6 +371,50 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       const graph = touch({
         ...state.graph,
         exportConfiguration: { ...current, ...patch },
+      });
+      schedulePersist(graph);
+      return { ...history, graph };
+    });
+  },
+
+  setInfrastructureTokens: (tokens) => {
+    set((state) => {
+      const history = pushHistory(state);
+      const graph = touch({
+        ...state.graph,
+        infrastructureTokens: tokens,
+      });
+      schedulePersist(graph);
+      return { ...history, graph };
+    });
+  },
+
+  upsertInfrastructureToken: (slot) => {
+    set((state) => {
+      const history = pushHistory(state);
+      const existing = state.graph.infrastructureTokens ?? [];
+      const index = existing.findIndex((item) => item.id === slot.id);
+      const next =
+        index >= 0
+          ? existing.map((item, i) => (i === index ? slot : item))
+          : [...existing, slot];
+      const graph = touch({
+        ...state.graph,
+        infrastructureTokens: next,
+      });
+      schedulePersist(graph);
+      return { ...history, graph };
+    });
+  },
+
+  removeInfrastructureToken: (slotId) => {
+    set((state) => {
+      const history = pushHistory(state);
+      const graph = touch({
+        ...state.graph,
+        infrastructureTokens: (state.graph.infrastructureTokens ?? []).filter(
+          (slot) => slot.id !== slotId,
+        ),
       });
       schedulePersist(graph);
       return { ...history, graph };

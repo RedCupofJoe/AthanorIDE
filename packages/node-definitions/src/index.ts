@@ -56,6 +56,7 @@ export {
   auditLogDefinition,
   identityReferenceDefinition,
   policyGuardrailDefinition,
+  primaryVectorDbsDefinition,
 } from "./enterprise/index.js";
 export {
   BIG_BLOCKS_NODE_DEFINITIONS,
@@ -64,16 +65,19 @@ export {
   audioToRagDefinition,
   autoRagDefinition,
   graphRagDefinition,
+  guardrailBuilderDefinition,
   imageClassifierDefinition,
   localS3BucketDefinition,
   modelRuntimeDefinition,
   multimodalRagDefinition,
+  postgresPgvectorDefinition,
   simpleUiChatbotDefinition,
   simpleUiMultimodalDefinition,
   soundClassifierDefinition,
   videoChunkingIcLoraDefinition,
   videoToRagDefinition,
   voiceToTextDefinition,
+  webToMarkdownDefinition,
 } from "./big-blocks/index.js";
 
 export const NODE_DEFINITIONS: readonly NodeDefinition[] = [

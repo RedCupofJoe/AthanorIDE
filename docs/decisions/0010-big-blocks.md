@@ -21,6 +21,6 @@ Architects often need multi-technology assemblies (gateways, RAG variants, local
 
 ## Consequences
 
-- Palette gains a Big Blocks section with 15 starters.
+- Palette gains a Big Blocks section with 18 starters.
 - Atomic foundation/vision/multi-agent nodes remain available for fine-grained graphs.
 - Runtime provisioning of MinIO/Ollama/etc. is out of band — the graph records intent and config.

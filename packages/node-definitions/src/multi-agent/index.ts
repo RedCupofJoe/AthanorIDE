@@ -4,7 +4,8 @@ import { portTemplate, type NodeDefinition } from "../types.js";
 export const agentDefinition: NodeDefinition = {
   type: "multi_agent.agent",
   displayName: "Agent",
-  description: "Defines an agent role with system prompt and model handle.",
+  description:
+    "Agent defines a role, system prompt, and model handle for multi-agent architectures. Optionally connect PROMPT and one or more TOOL_DEFINITION inputs, then use MODEL_HANDLE and EVENT outputs to show how the agent participates in a larger orchestration. It makes agent responsibilities and model choices reviewable on the canvas.",
   category: "multi-agent",
   version: "1.0.0",
   icon: "bot",
@@ -52,13 +53,14 @@ export const agentDefinition: NodeDefinition = {
     },
   ],
   documentation:
-    "Agent captures role, prompt, and model lineage for multi-agent designs. It does not invoke models inside the IDE.",
+    "Use Agent when designing multi-role systems—researchers, critics, routers, planners—before committing to a specific harness or runtime. Wire optional PROMPT and TOOL_DEFINITION inputs to show how each role is prompted and which tools it may call. The IDE does not invoke models or run agent loops; export captures role, prompt, model, and tool lineage for review. Prefer Agentic Harness Big Block when you want an opinionated Pi/Goose-style assembly with MCP and companion frameworks instead of composing atomic agent nodes by hand.",
 };
 
 export const toolDefinitionDefinition: NodeDefinition = {
   type: "multi_agent.tool_definition",
   displayName: "Tool Definition",
-  description: "Declares a tool schema agents may call.",
+  description:
+    "Tool Definition declares a named tool schema agents may call, emitting TOOL_DEFINITION. Author toolName, description, and a JSON Schema for arguments, then connect into Agent tool inputs (multiple allowed). It documents the callable surface of your agent system without implementing the tool body in the IDE.",
   category: "multi-agent",
   version: "1.0.0",
   icon: "wrench",
@@ -88,17 +90,19 @@ export const toolDefinitionDefinition: NodeDefinition = {
       description: "JSON Schema for tool arguments.",
       type: "text",
       required: true,
-      defaultValue: '{\n  "type": "object",\n  "properties": {\n    "query": { "type": "string" }\n  },\n  "required": ["query"]\n}',
+      defaultValue:
+        '{\n  "type": "object",\n  "properties": {\n    "query": { "type": "string" }\n  },\n  "required": ["query"]\n}',
     },
   ],
   documentation:
-    "Tool Definition documents callable tool contracts. Runtime binding happens outside the IDE.",
+    "Best used whenever agents need structured capabilities—search, ticketing, retrieval—that should be reviewed as contracts. Runtime binding happens outside the IDE; invalid JSON Schema fails validation. Prefer MCP Server when tools are discovered from an external MCP endpoint rather than hand-authored schemas.",
 };
 
 export const mcpServerDefinition: NodeDefinition = {
   type: "multi_agent.mcp_server",
   displayName: "MCP Server",
-  description: "References an MCP server endpoint for tool discovery.",
+  description:
+    "MCP Server references an Model Context Protocol endpoint for tool discovery, emitting MCP_SERVER. Configure server name, endpoint, and transport, then connect into harnesses or agents that consume MCP. It records how the architecture reaches external tool hosts without opening those connections from the IDE.",
   category: "multi-agent",
   version: "1.0.0",
   icon: "server",
@@ -133,7 +137,7 @@ export const mcpServerDefinition: NodeDefinition = {
     },
   ],
   documentation:
-    "MCP Server records endpoint and transport lineage. The IDE does not open network connections to the server.",
+    "Use it when tools live behind MCP (filesystem, browser, SaaS bridges) and should appear as first-class architecture dependencies. The IDE never connects to the server. Prefer Tool Definition for a small number of hand-written tools, and Agentic Harness when MCP is one ingredient of a larger opinionated stack.",
 };
 
 export const MULTI_AGENT_NODE_DEFINITIONS: readonly NodeDefinition[] = [

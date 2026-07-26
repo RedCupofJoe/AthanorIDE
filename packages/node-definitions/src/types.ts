@@ -41,6 +41,11 @@ export interface ConfigFieldDefinition {
   options?: readonly string[];
   advanced?: boolean;
   recommendedDefaultExplanation?: string;
+  /** When set, the inspector shows this field only if another config key matches. */
+  showWhen?: {
+    key: string;
+    equals: string | readonly string[];
+  };
 }
 
 export interface NodeDefinition {

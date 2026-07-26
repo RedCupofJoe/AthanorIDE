@@ -1,6 +1,13 @@
 """Application settings."""
 
+from pathlib import Path
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_data_dir() -> Path:
+    return Path.home() / ".local" / "share" / "athanor"
 
 
 class Settings(BaseSettings):
@@ -23,6 +30,11 @@ class Settings(BaseSettings):
     sandbox_memory: str = "128m"
     sandbox_cpus: str = "0.5"
     sandbox_pids_limit: int = 64
+
+    # Local secrets vault
+    data_dir: Path = Field(default_factory=_default_data_dir)
+    vault_idle_ttl_seconds: int = 1800
+    vault_allow_remote: bool = False
 
 
 settings = Settings()

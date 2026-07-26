@@ -73,6 +73,7 @@ def ir_context(ir: ExportIR) -> dict[str, Any]:
         "http_clients": [asdict(item) for item in ir.http_clients],
         "env_bindings": [asdict(item) for item in ir.env_bindings],
         "secret_references": [asdict(item) for item in ir.secret_references],
+        "infrastructure_tokens": [asdict(item) for item in ir.infrastructure_tokens],
         "fine_tuning": [asdict(item) for item in ir.fine_tuning],
         "vision": [asdict(item) for item in ir.vision],
         "multi_agent": [asdict(item) for item in ir.multi_agent],

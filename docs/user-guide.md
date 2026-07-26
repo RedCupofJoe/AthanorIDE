@@ -39,6 +39,20 @@ Autosave writes the open graph into the project slot after edits (debounced). Us
 
 Graph JSON import/export is also available from the toolbar (imports join the project library).
 
+### Infrastructure pull tokens
+
+Toolbar **Infra tokens** opens project-level slots for registry credentials (Hugging Face, Kaggle, Docker Hub, GitHub, UCI Machine Learning, PyTorch Hub). Use the dropdown to add custom slots. Enter the **secret name** (e.g. `HF_TOKEN`), not the token value. Individual nodes still have their own `tokenSecretName` (or similar) fields for service endpoints.
+
+### Local vault
+
+Toolbar **Local vault** stores secret **values** encrypted on the API host (passphrase-locked). Use it to:
+
+1. Unlock / add values keyed by the same secret names used in Infra tokens or nodes.
+2. Check **Graph coverage** (present / missing).
+3. **Materialize .env** to an absolute path next to an exported project, then run compose / `scripts/run-local.sh`.
+
+IDE Run still redacts secrets in the canvas. Export ZIPs never include `.env`.
+
 ## Macros, portals, swimlanes
 
 - **Macro** — select nodes → Collapse macro; expands later from the inspector or node.

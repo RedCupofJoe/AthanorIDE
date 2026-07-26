@@ -42,6 +42,12 @@
       "items": { "$ref": "#/$defs/PortalBus" },
       "default": []
     },
+    "infrastructureTokens": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/InfrastructureTokenSlot" },
+      "default": [],
+      "description": "Project-level infrastructure pull-token slots (secret names only)."
+    },
     "validationResults": {
       "type": "array",
       "items": { "$ref": "#/$defs/ValidationIssue" },
@@ -251,6 +257,39 @@
           "enum": ["project", "macro", "deployment"]
         },
         "scopeId": { "type": "string" },
+        "metadata": { "type": "object" }
+      }
+    },
+    "InfrastructureTokenSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "label", "secretName"],
+      "description": "Infrastructure registry pull credential reference (name only, never the token value).",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "huggingface",
+            "kaggle",
+            "docker",
+            "github",
+            "uci_ml",
+            "pytorch_hub",
+            "custom"
+          ]
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "secretName": {
+          "type": "string",
+          "description": "Environment/vault secret name. Never store the token value here."
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["env", "file", "vault", "cloud_secret_manager"],
+          "default": "env"
+        },
+        "recommendedEnvName": { "type": "string" },
         "metadata": { "type": "object" }
       }
     },

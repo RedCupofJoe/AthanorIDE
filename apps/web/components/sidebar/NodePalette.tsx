@@ -9,6 +9,8 @@ import {
   AudioLines,
   Bot,
   Braces,
+  ChevronDown,
+  ChevronRight,
   Clapperboard,
   Code2,
   Cpu,
@@ -41,6 +43,9 @@ import {
   WandSparkles,
   Wrench,
   BadgeCheck,
+  FileText,
+  Cylinder,
+  Boxes,
 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
@@ -84,6 +89,9 @@ const ICONS = {
   headphones: Headphones,
   layers: Layers,
   clapperboard: Clapperboard,
+  "file-text": FileText,
+  cylinder: Cylinder,
+  boxes: Boxes,
 } as const;
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -101,6 +109,10 @@ export function NodePalette() {
   const compact = useUiPreferencesStore((state) => state.paletteCompact);
   const toggleCompact = useUiPreferencesStore((state) => state.togglePaletteCompact);
   const [pendingType, setPendingType] = useState<string | null>(null);
+  /** Types whose descriptions are collapsed; absent = expanded (default). */
+  const [collapsedDescriptions, setCollapsedDescriptions] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const definitions = listNodeDefinitions();
 
   const grouped = definitions.reduce<Record<string, Array<(typeof definitions)[number]>>>(
@@ -130,11 +142,23 @@ export function NodePalette() {
     setPendingType(type);
   };
 
+  const toggleDescription = (type: string) => {
+    setCollapsedDescriptions((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
   return (
     <aside
       className={cn(
         "flex h-full flex-col gap-3 border-r border-[var(--athanor-mist)] bg-white/80 p-4",
-        compact ? "w-56" : "w-72",
+        compact ? "w-56" : "w-80",
       )}
       aria-label="Node palette"
     >
@@ -144,8 +168,8 @@ export function NodePalette() {
             <h2 className="text-sm font-semibold">Node library</h2>
             <p className="mt-1 text-xs text-[var(--athanor-slate)]">
               {compact
-                ? "Click once to select, again to add."
-                : "Click a node to preview, click again to add it to the canvas."}
+                ? "Names only — for proficient users. Click twice to place."
+                : "Two-paragraph guides for each node. Click twice to place."}
             </p>
           </div>
           <button
@@ -158,7 +182,11 @@ export function NodePalette() {
             )}
             aria-pressed={compact}
             onClick={toggleCompact}
-            title={compact ? "Show descriptions" : "Hide descriptions"}
+            title={
+              compact
+                ? "Show full two-paragraph guides"
+                : "Compact mode for proficient users (names only)"
+            }
           >
             {compact ? "Compact" : "Full"}
           </button>
@@ -187,53 +215,90 @@ export function NodePalette() {
               {items.map((definition) => {
                 const Icon = ICONS[definition.icon as keyof typeof ICONS] ?? Type;
                 const selected = pendingType === definition.type;
+                const docsId = `palette-docs-${definition.type.replace(/\./g, "-")}`;
+                const descriptionExpanded =
+                  !compact && !collapsedDescriptions.has(definition.type);
                 return (
                   <li key={definition.type}>
-                    <button
-                      type="button"
-                      aria-pressed={selected}
+                    <div
                       className={cn(
-                        "flex w-full items-start gap-2 rounded border bg-white text-left transition-colors",
-                        compact ? "px-2.5 py-1.5" : "px-3 py-2",
+                        "flex w-full items-start gap-1 rounded border bg-white transition-colors",
+                        compact ? "px-1.5 py-1.5" : "px-2 py-2",
                         selected
                           ? "border-[var(--athanor-ember)] ring-2 ring-orange-200"
                           : "border-[var(--athanor-mist)] hover:border-[var(--athanor-ember)]",
-                        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--athanor-ember)]",
                       )}
-                      onClick={() => onPaletteClick(definition.type)}
-                      onDoubleClick={(event) => {
-                        event.preventDefault();
-                        placeNode(definition.type);
-                      }}
                     >
-                      <Icon
-                        className={cn(
-                          "shrink-0 text-[var(--athanor-ember)]",
-                          compact ? "mt-0.5 size-3.5" : "mt-0.5 size-4",
-                        )}
-                        aria-hidden
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={cn(
-                            "block font-medium",
-                            compact ? "text-xs" : "text-sm",
-                          )}
+                      {!compact && (
+                        <button
+                          type="button"
+                          className="mt-0.5 shrink-0 rounded p-0.5 text-[var(--athanor-slate)] hover:bg-stone-100 hover:text-[var(--athanor-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--athanor-ember)]"
+                          aria-expanded={descriptionExpanded}
+                          aria-controls={docsId}
+                          title={
+                            descriptionExpanded
+                              ? "Collapse description"
+                              : "Expand description"
+                          }
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleDescription(definition.type);
+                          }}
                         >
-                          {definition.displayName}
-                        </span>
-                        {!compact && (
-                          <>
-                            <span className="mt-0.5 block text-xs text-[var(--athanor-slate)]">
-                              {definition.description}
-                            </span>
-                            <span className="mt-1.5 block text-[11px] leading-snug text-[var(--athanor-slate)]">
-                              {definition.documentation}
-                            </span>
-                          </>
+                          {descriptionExpanded ? (
+                            <ChevronDown className="size-3.5" aria-hidden />
+                          ) : (
+                            <ChevronRight className="size-3.5" aria-hidden />
+                          )}
+                          <span className="sr-only">
+                            {descriptionExpanded
+                              ? `Collapse ${definition.displayName} description`
+                              : `Expand ${definition.displayName} description`}
+                          </span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        className={cn(
+                          "flex min-w-0 flex-1 items-start gap-2 text-left",
+                          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--athanor-ember)]",
                         )}
-                      </span>
-                    </button>
+                        onClick={() => onPaletteClick(definition.type)}
+                        onDoubleClick={(event) => {
+                          event.preventDefault();
+                          placeNode(definition.type);
+                        }}
+                      >
+                        <Icon
+                          className={cn(
+                            "shrink-0 text-[var(--athanor-ember)]",
+                            compact ? "mt-0.5 size-3.5" : "mt-0.5 size-4",
+                          )}
+                          aria-hidden
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={cn(
+                              "block font-medium",
+                              compact ? "text-xs" : "text-sm",
+                            )}
+                          >
+                            {definition.displayName}
+                          </span>
+                          {descriptionExpanded && (
+                            <span id={docsId} className="mt-1 block">
+                              <span className="block text-xs leading-relaxed text-[var(--athanor-slate)]">
+                                {definition.description}
+                              </span>
+                              <span className="mt-2 block text-[11px] leading-relaxed text-[var(--athanor-slate)]/90">
+                                {definition.documentation}
+                              </span>
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    </div>
                   </li>
                 );
               })}

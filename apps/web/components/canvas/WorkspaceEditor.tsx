@@ -11,6 +11,8 @@ import { ArchitectureCanvas } from "@/components/canvas/ArchitectureCanvas";
 import { EditorToolbar } from "@/components/canvas/EditorToolbar";
 import { ExecutionPanel } from "@/components/execution/ExecutionPanel";
 import { DeleteConfirmationPanel } from "@/components/inspector/DeleteConfirmationPanel";
+import { InfrastructureTokensPanel } from "@/components/inspector/InfrastructureTokensPanel";
+import { LocalVaultPanel } from "@/components/inspector/LocalVaultPanel";
 import { NodeInspector } from "@/components/inspector/NodeInspector";
 import { NodePalette } from "@/components/sidebar/NodePalette";
 import { ValidationPanel } from "@/components/validation/ValidationPanel";
@@ -20,12 +22,15 @@ type WorkspaceEditorProps = {
   projectId?: string;
 };
 
+type RightPanel = "inspector" | "infra" | "vault";
+
 export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
   const router = useRouter();
   const hydrate = useProjectStore((state) => state.hydrate);
   const hydrated = useProjectStore((state) => state.hydrated);
   const openGraphId = useProjectStore((state) => state.graph.project.id);
   const [missing, setMissing] = useState(false);
+  const [rightPanel, setRightPanel] = useState<RightPanel>("inspector");
 
   useEffect(() => {
     useProjectStore.setState({ hydrated: false });
@@ -66,7 +71,10 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
 
   return (
     <div className="flex h-screen flex-col bg-[var(--athanor-paper)]">
-      <EditorToolbar />
+      <EditorToolbar
+        onOpenInfrastructureTokens={() => setRightPanel("infra")}
+        onOpenLocalVault={() => setRightPanel("vault")}
+      />
       <div className="flex min-h-0 flex-1">
         <NodePalette />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -77,10 +85,18 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
           <ValidationPanel />
         </div>
         <div className="flex w-80 shrink-0 flex-col border-l border-[var(--athanor-mist)]">
-          <DeleteConfirmationPanel />
-          <div className="min-h-0 flex-1">
-            <NodeInspector />
-          </div>
+          {rightPanel === "infra" ? (
+            <InfrastructureTokensPanel open onClose={() => setRightPanel("inspector")} />
+          ) : rightPanel === "vault" ? (
+            <LocalVaultPanel open onClose={() => setRightPanel("inspector")} />
+          ) : (
+            <>
+              <DeleteConfirmationPanel />
+              <div className="min-h-0 flex-1">
+                <NodeInspector />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

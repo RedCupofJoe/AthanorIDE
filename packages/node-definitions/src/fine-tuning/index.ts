@@ -4,7 +4,8 @@ import { portTemplate, type NodeDefinition } from "../types.js";
 export const datasetLoaderDefinition: NodeDefinition = {
   type: "fine_tuning.dataset_loader",
   displayName: "Dataset Loader",
-  description: "Loads a local or remote dataset for fine-tuning workflows.",
+  description:
+    "Dataset Loader declares a training dataset as a DATASET output for fine-tuning graphs. Point it at a path or URI, choose a format (jsonl, csv, parquet, or Hugging Face), and connect the output into LoRA Trainer or other training consumers. It makes data lineage visible on the canvas so architects can see what feeds adaptation jobs.",
   category: "fine-tuning",
   version: "1.0.0",
   icon: "database",
@@ -31,13 +32,14 @@ export const datasetLoaderDefinition: NodeDefinition = {
     },
   ],
   documentation:
-    "Dataset Loader declares training data lineage. Export documents the path and format; training execution is out of band for Phase 5.",
+    "Best used at the start of fine-tuning or evaluation subgraphs when the corpus should be part of the architecture record. The IDE does not download or shuffle data—export documents path and format for out-of-band training. Prefer Web-to-Markdown or Video-Chunking Big Blocks when you still need to produce the dataset before loading it.",
 };
 
 export const loraTrainerDefinition: NodeDefinition = {
   type: "fine_tuning.lora_trainer",
   displayName: "LoRA Trainer",
-  description: "Configures a LoRA fine-tuning job over an incoming dataset.",
+  description:
+    "LoRA Trainer configures a LoRA adaptation job over an incoming DATASET and emits MODEL_WEIGHTS lineage. Connect Dataset Loader (or compatible producers), set base model, rank, learning rate, and output path, then export the hyperparameters with the architecture. It captures training intent without launching GPUs inside the IDE.",
   category: "fine-tuning",
   version: "1.0.0",
   icon: "sparkles",
@@ -128,7 +130,7 @@ export const loraTrainerDefinition: NodeDefinition = {
     },
   ],
   documentation:
-    "LoRA Trainer captures hyperparameters and dataset lineage for export. It does not launch training inside the IDE.",
+    "Use it when you need an auditable LoRA recipe tied to a specific dataset node—product adapters, domain jargon, or IC LoRA from video chunks. Training execution remains out of band; pair with Model Runtime or Vision Model nodes to show where adapted weights will be consumed after training.",
 };
 
 export const FINE_TUNING_NODE_DEFINITIONS: readonly NodeDefinition[] = [

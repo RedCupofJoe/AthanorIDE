@@ -94,9 +94,20 @@ export function NodeInspector() {
     return { name: node.name, configuration };
   }, [definition, node]);
 
-  const { register, handleSubmit, reset, getValues } = useForm<InspectorFormValues>({
+  const { register, handleSubmit, reset, getValues, watch } = useForm<InspectorFormValues>({
     values: formValues,
   });
+
+  const watchedConfiguration = watch("configuration");
+
+  const fieldVisible = (
+    field: NonNullable<typeof definition>["configurationFields"][number],
+  ): boolean => {
+    if (!field.showWhen) return true;
+    const current = watchedConfiguration?.[field.showWhen.key] ?? "";
+    const expected = field.showWhen.equals;
+    return Array.isArray(expected) ? expected.includes(current) : current === expected;
+  };
 
   useEffect(() => {
     reset(formValues);
@@ -104,7 +115,9 @@ export function NodeInspector() {
 
   const renderConfigField = (
     field: NonNullable<typeof definition>["configurationFields"][number],
-  ) => (
+  ) => {
+    if (!fieldVisible(field)) return null;
+    return (
     <label key={field.key} className="block space-y-1 text-sm">
       <span className="font-medium">{field.label}</span>
       <span className="block text-xs text-[var(--athanor-slate)]">{field.description}</span>
@@ -155,7 +168,8 @@ export function NodeInspector() {
         </span>
       )}
     </label>
-  );
+    );
+  };
 
   if (selectedMacro) {
     return (

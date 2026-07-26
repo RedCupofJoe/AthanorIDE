@@ -16,7 +16,11 @@ describe("node definitions catalog", () => {
     expect(types).toContain("big_blocks.ai_gateway");
     expect(types).toContain("big_blocks.agentic_harness");
     expect(types).toContain("big_blocks.video_chunking_ic_lora");
-    expect(types).toHaveLength(36);
+    expect(types).toContain("big_blocks.web_to_markdown");
+    expect(types).toContain("big_blocks.postgres_pgvector");
+    expect(types).toContain("big_blocks.guardrail_builder");
+    expect(types).toContain("enterprise.primary_vector_dbs");
+    expect(types).toHaveLength(40);
   });
 
   it("creates a text input node with STRING output", () => {
@@ -69,6 +73,7 @@ describe("node definitions catalog", () => {
       "enterprise.policy_guardrail",
       "enterprise.audit_log",
       "enterprise.identity_reference",
+      "enterprise.primary_vector_dbs",
     ]);
   });
 
@@ -83,12 +88,28 @@ describe("node definitions catalog", () => {
 
   it("groups big-blocks with shared cloud + template fields", () => {
     const blocks = listNodeDefinitionsByCategory("big-blocks");
-    expect(blocks).toHaveLength(15);
+    expect(blocks).toHaveLength(18);
     const gateway = createNodeFromDefinition("big_blocks.ai_gateway", { x: 0, y: 0 });
     expect(gateway.configuration.openSourceStack).toBe("litellm");
     expect(gateway.configuration).toHaveProperty("customTemplate");
     expect(gateway.configuration.useCustomTemplate).toBe(false);
     const harness = createNodeFromDefinition("big_blocks.agentic_harness", { x: 0, y: 0 });
     expect(harness.configuration.harness).toBe("goose");
+    const webMd = createNodeFromDefinition("big_blocks.web_to_markdown", { x: 0, y: 0 });
+    expect(webMd.configuration.openSourceStack).toBe("markitdown");
+    expect(webMd.outputs[0]?.contractType).toBe("STRING");
+    const pg = createNodeFromDefinition("big_blocks.postgres_pgvector", { x: 0, y: 0 });
+    expect(pg.configuration.openSourceStack).toBe("postgresql-pgvector");
+    const guardrail = createNodeFromDefinition("big_blocks.guardrail_builder", {
+      x: 0,
+      y: 0,
+    });
+    expect(guardrail.configuration.systemPromptPosture).toBe("standard");
+    expect(guardrail.configuration.vectorStore).toBe("chromadb");
+    expect(guardrail.outputs[0]?.contractType).toBe("STRING");
+    expect(guardrail.outputs[1]?.name).toBe("reasoningDocument");
+    const dualDb = createNodeFromDefinition("enterprise.primary_vector_dbs", { x: 0, y: 0 });
+    expect(dualDb.configuration.primaryDb).toBe("postgresql");
+    expect(dualDb.configuration.vectorDb).toBe("qdrant");
   });
 });

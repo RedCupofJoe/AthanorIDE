@@ -12,7 +12,7 @@ Declarative catalog of canvas nodes: ports, configuration fields, documentation,
 | Fine-tuning | `fine_tuning.*` | Dataset Loader, LoRA Trainer |
 | Vision | `vision.*` | Image Input, Preprocessor, Vision Model |
 | Multi-agent | `multi_agent.*` | Agent, Tool Definition, MCP Server |
-| Enterprise | `enterprise.*` | Policy Guardrail, Audit Log, Identity Reference |
+| Enterprise | `enterprise.*` | Policy Guardrail, Audit Log, Identity Reference, Primary DB + Vector DB |
 | Big Blocks | `big_blocks.*` | Opinionated multi-tech composites (gateway, RAG, UI, harness, …) |
 
 Human-readable reference: [docs/node-catalog.md](../../docs/node-catalog.md).

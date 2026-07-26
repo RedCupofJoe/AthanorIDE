@@ -10,12 +10,14 @@ import {
   Boxes,
   Download,
   FolderOpen,
+  KeyRound,
   Map,
   Package,
   Play,
   Redo2,
   Save,
   Search,
+  Shield,
   ShieldCheck,
   Undo2,
 } from "lucide-react";
@@ -34,7 +36,15 @@ import { useExecutionStore } from "@/store/execution-store";
 import { useSelectionStore } from "@/store/selection-store";
 import { useValidationStore } from "@/store/validation-store";
 
-export function EditorToolbar() {
+type EditorToolbarProps = {
+  onOpenInfrastructureTokens?: () => void;
+  onOpenLocalVault?: () => void;
+};
+
+export function EditorToolbar({
+  onOpenInfrastructureTokens,
+  onOpenLocalVault,
+}: EditorToolbarProps) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
@@ -229,6 +239,20 @@ export function EditorToolbar() {
             Terraform
           </label>
         </fieldset>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
+          onClick={() => onOpenInfrastructureTokens?.()}
+        >
+          <KeyRound className="size-4" /> Infra tokens
+        </button>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
+          onClick={() => onOpenLocalVault?.()}
+        >
+          <Shield className="size-4" /> Local vault
+        </button>
         <button
           type="button"
           className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"

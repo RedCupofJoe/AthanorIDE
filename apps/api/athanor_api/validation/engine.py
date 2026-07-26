@@ -331,6 +331,39 @@ def _validate_node_specific(node: ArchitectureNode) -> list[ValidationIssue]:
                     )
                 )
 
+    if node.type == "enterprise.primary_vector_dbs":
+        for key in FORBIDDEN_IDENTITY_KEYS | FORBIDDEN_SECRET_KEYS:
+            if key in config and not _config_value_missing(config, key):
+                issues.append(
+                    _issue(
+                        severity="error",
+                        code="ENTERPRISE_DB_CREDENTIAL_EMBEDDED",
+                        message=(
+                            f"Primary DB + Vector DB '{node.name}' must not embed credentials "
+                            f"(found '{key}')."
+                        ),
+                        node_id=node.id,
+                        suggested_action=(
+                            "Remove embedded credentials; use primarySecretName / vectorSecretName."
+                        ),
+                    )
+                )
+        for secret_key in ("primarySecretName", "vectorSecretName"):
+            secret_name = config.get(secret_key, "")
+            if isinstance(secret_name, str) and len(secret_name) > 128:
+                issues.append(
+                    _issue(
+                        severity="error",
+                        code="ENTERPRISE_DB_SECRET_NAME_TOO_LONG",
+                        message=(
+                            f"Primary DB + Vector DB '{node.name}' {secret_key} looks like an "
+                            "embedded credential."
+                        ),
+                        node_id=node.id,
+                        suggested_action="Use a short secret name, not the credential itself.",
+                    )
+                )
+
     if node.type.startswith("big_blocks."):
         for key in FORBIDDEN_IDENTITY_KEYS | FORBIDDEN_SECRET_KEYS:
             if key in config and not _config_value_missing(config, key):
@@ -386,6 +419,43 @@ def validate_architecture_graph(graph: ArchitectureGraph) -> list[ValidationIssu
     node_ids = [node.id for node in graph.nodes]
     edge_ids = [edge.id for edge in graph.edges]
     nodes_by_id = {node.id: node for node in graph.nodes}
+
+    seen_slot_ids: set[str] = set()
+    for slot in graph.infrastructure_tokens:
+        if slot.id in seen_slot_ids:
+            issues.append(
+                _issue(
+                    severity="error",
+                    code="DUPLICATE_INFRA_TOKEN_ID",
+                    message=f"Duplicate infrastructure token slot id '{slot.id}'.",
+                    suggested_action="Assign a unique id to each infrastructure token slot.",
+                )
+            )
+        seen_slot_ids.add(slot.id)
+        if len(slot.secret_name) > 128:
+            issues.append(
+                _issue(
+                    severity="error",
+                    code="INFRA_TOKEN_NAME_TOO_LONG",
+                    message=(
+                        f"Infrastructure token '{slot.label}' secretName looks like an "
+                        "embedded token value."
+                    ),
+                    suggested_action="Use a short secret name (e.g. HF_TOKEN), not the token itself.",
+                )
+            )
+        if text_contains_embedded_secret(slot.secret_name):
+            issues.append(
+                _issue(
+                    severity="error",
+                    code="INFRA_TOKEN_VALUE_EMBEDDED",
+                    message=(
+                        f"Infrastructure token '{slot.label}' secretName appears to contain "
+                        "a credential value."
+                    ),
+                    suggested_action="Store only the secret name; inject the value at runtime.",
+                )
+            )
 
     # Duplicate identifiers
     seen_nodes: set[str] = set()

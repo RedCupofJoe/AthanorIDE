@@ -166,6 +166,31 @@ class PortalBus(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+InfrastructureTokenKind = Literal[
+    "huggingface",
+    "kaggle",
+    "docker",
+    "github",
+    "uci_ml",
+    "pytorch_hub",
+    "custom",
+]
+
+
+class InfrastructureTokenSlot(BaseModel):
+    """Project-level infrastructure pull-token reference (secret name only)."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str
+    kind: InfrastructureTokenKind
+    label: str
+    secret_name: str = Field(alias="secretName")
+    provider: Literal["env", "file", "vault", "cloud_secret_manager"] = "env"
+    recommended_env_name: str | None = Field(default=None, alias="recommendedEnvName")
+    metadata: dict[str, Any] | None = None
+
+
 class ExportConfiguration(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -192,6 +217,9 @@ class ArchitectureGraph(BaseModel):
     )
     macro_blocks: list[MacroBlock] = Field(default_factory=list, alias="macroBlocks")
     portal_buses: list[PortalBus] = Field(default_factory=list, alias="portalBuses")
+    infrastructure_tokens: list[InfrastructureTokenSlot] = Field(
+        default_factory=list, alias="infrastructureTokens"
+    )
     validation_results: list[ValidationIssue] = Field(
         default_factory=list, alias="validationResults"
     )
