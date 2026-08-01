@@ -109,10 +109,10 @@ export function NodePalette() {
   const compact = useUiPreferencesStore((state) => state.paletteCompact);
   const toggleCompact = useUiPreferencesStore((state) => state.togglePaletteCompact);
   const [pendingType, setPendingType] = useState<string | null>(null);
-  /** Types whose descriptions are collapsed; absent = expanded (default). */
-  const [collapsedDescriptions, setCollapsedDescriptions] = useState<
-    ReadonlySet<string>
-  >(() => new Set());
+  /** Types whose descriptions are expanded (max 3). Empty = all collapsed (default). */
+  const [expandedDescriptions, setExpandedDescriptions] = useState<readonly string[]>(
+    () => [],
+  );
   const definitions = listNodeDefinitions();
 
   const grouped = definitions.reduce<Record<string, Array<(typeof definitions)[number]>>>(
@@ -143,14 +143,13 @@ export function NodePalette() {
   };
 
   const toggleDescription = (type: string) => {
-    setCollapsedDescriptions((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) {
-        next.delete(type);
-      } else {
-        next.add(type);
+    setExpandedDescriptions((prev) => {
+      if (prev.includes(type)) {
+        return prev.filter((item) => item !== type);
       }
-      return next;
+      const next = [...prev, type];
+      // Keep at most 3 open; drop the oldest expansion when adding a fourth.
+      return next.length > 3 ? next.slice(next.length - 3) : next;
     });
   };
 
@@ -169,7 +168,7 @@ export function NodePalette() {
             <p className="mt-1 text-xs text-[var(--athanor-slate)]">
               {compact
                 ? "Names only — for proficient users. Click twice to place."
-                : "Two-paragraph guides for each node. Click twice to place."}
+                : "Descriptions collapsed by default. Expand with the chevron (max 3 open). Click twice to place."}
             </p>
           </div>
           <button
@@ -217,7 +216,7 @@ export function NodePalette() {
                 const selected = pendingType === definition.type;
                 const docsId = `palette-docs-${definition.type.replace(/\./g, "-")}`;
                 const descriptionExpanded =
-                  !compact && !collapsedDescriptions.has(definition.type);
+                  !compact && expandedDescriptions.includes(definition.type);
                 return (
                   <li key={definition.type}>
                     <div

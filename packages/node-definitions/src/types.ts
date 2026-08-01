@@ -61,6 +61,14 @@ export interface NodeDefinition {
   documentation: string;
   /** Exporter / lineage behavior for this node. */
   exportKind: NodeExportKind;
+  /**
+   * Suggested upstream / downstream neighbors for the inspector.
+   * Populated when the catalog is assembled (see recommended-adjacent.ts).
+   */
+  recommendedAdjacent?: {
+    feedsIn: readonly string[];
+    feedsOut: readonly string[];
+  };
 }
 
 export interface NodeDefinitionSummary {

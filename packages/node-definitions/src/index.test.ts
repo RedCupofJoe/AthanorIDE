@@ -112,4 +112,17 @@ describe("node definitions catalog", () => {
     expect(dualDb.configuration.primaryDb).toBe("postgresql");
     expect(dualDb.configuration.vectorDb).toBe("qdrant");
   });
+
+  it("attaches recommended adjacent feeds for every catalog node", () => {
+    for (const definition of listNodeDefinitions()) {
+      expect(definition.recommendedAdjacent).toBeDefined();
+      const adjacent = definition.recommendedAdjacent!;
+      for (const type of [...adjacent.feedsIn, ...adjacent.feedsOut]) {
+        expect(getNodeDefinition(type)?.displayName).toBeTruthy();
+      }
+    }
+    const text = getNodeDefinition("foundation.text_input");
+    expect(text?.recommendedAdjacent?.feedsOut).toContain("foundation.prompt_template");
+    expect(text?.recommendedAdjacent?.feedsIn).toEqual([]);
+  });
 });

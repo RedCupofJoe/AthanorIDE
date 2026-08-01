@@ -9,6 +9,7 @@ import { ENTERPRISE_NODE_DEFINITIONS } from "./enterprise/index.js";
 import { FINE_TUNING_NODE_DEFINITIONS } from "./fine-tuning/index.js";
 import { FOUNDATION_NODE_DEFINITIONS } from "./foundation/index.js";
 import { MULTI_AGENT_NODE_DEFINITIONS } from "./multi-agent/index.js";
+import { getRecommendedAdjacent } from "./recommended-adjacent.js";
 import type { NodeDefinition, NodeDefinitionSummary } from "./types.js";
 import { VISION_NODE_DEFINITIONS } from "./vision/index.js";
 
@@ -20,6 +21,8 @@ export type {
   NodeDefinitionSummary,
   NodeExportKind,
 } from "./types.js";
+export type { RecommendedAdjacent } from "./recommended-adjacent.js";
+export { getRecommendedAdjacent, RECOMMENDED_ADJACENT } from "./recommended-adjacent.js";
 export { portTemplate, requiredConfigKeys } from "./types.js";
 export {
   FOUNDATION_NODE_DEFINITIONS,
@@ -80,6 +83,13 @@ export {
   webToMarkdownDefinition,
 } from "./big-blocks/index.js";
 
+function withRecommendedAdjacent(definition: NodeDefinition): NodeDefinition {
+  return {
+    ...definition,
+    recommendedAdjacent: getRecommendedAdjacent(definition.type),
+  };
+}
+
 export const NODE_DEFINITIONS: readonly NodeDefinition[] = [
   ...FOUNDATION_NODE_DEFINITIONS,
   ...FINE_TUNING_NODE_DEFINITIONS,
@@ -87,8 +97,7 @@ export const NODE_DEFINITIONS: readonly NodeDefinition[] = [
   ...MULTI_AGENT_NODE_DEFINITIONS,
   ...ENTERPRISE_NODE_DEFINITIONS,
   ...BIG_BLOCKS_NODE_DEFINITIONS,
-];
-
+].map(withRecommendedAdjacent);
 const BY_TYPE = new Map(NODE_DEFINITIONS.map((definition) => [definition.type, definition]));
 
 export function listNodeDefinitions(): readonly NodeDefinition[] {

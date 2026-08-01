@@ -27,6 +27,7 @@ export function NodeInspector() {
   const focusNode = useSelectionStore((state) => state.focusNode);
   const graph = useProjectStore((state) => state.graph);
   const nodes = graph.nodes;
+  const addNode = useProjectStore((state) => state.addNode);
   const updateNodeConfiguration = useProjectStore((state) => state.updateNodeConfiguration);
   const updateNodeName = useProjectStore((state) => state.updateNodeName);
   const updateNodeDeploymentTarget = useProjectStore(
@@ -438,7 +439,77 @@ export function NodeInspector() {
           </p>
         )}
         <p className="mt-2 leading-relaxed">{definition.documentation}</p>
+        <RecommendedAdjacentSection
+          feedsIn={definition.recommendedAdjacent?.feedsIn ?? []}
+          feedsOut={definition.recommendedAdjacent?.feedsOut ?? []}
+          onAdd={(type) => {
+            const id = addNode(type, {
+              x: (node.position.x ?? 80) + 40,
+              y: (node.position.y ?? 80) + 80,
+            });
+            focusNode(id);
+          }}
+        />
       </section>
     </aside>
+  );
+}
+
+function RecommendedAdjacentSection({
+  feedsIn,
+  feedsOut,
+  onAdd,
+}: {
+  feedsIn: readonly string[];
+  feedsOut: readonly string[];
+  onAdd: (type: string) => void;
+}) {
+  if (feedsIn.length === 0 && feedsOut.length === 0) {
+    return null;
+  }
+
+  const renderList = (types: readonly string[], emptyLabel: string) => {
+    if (types.length === 0) {
+      return <p className="text-[11px] text-[var(--athanor-slate)]">{emptyLabel}</p>;
+    }
+    return (
+      <ul className="mt-1 space-y-1">
+        {types.map((type) => {
+          const adjacent = getNodeDefinition(type);
+          const label = adjacent?.displayName ?? type;
+          return (
+            <li key={type}>
+              <button
+                type="button"
+                className="text-left text-[11px] text-[var(--athanor-ember)] underline decoration-[var(--athanor-mist)] underline-offset-2 hover:decoration-[var(--athanor-ember)]"
+                title={`Add ${label} to canvas`}
+                onClick={() => onAdd(type)}
+              >
+                {label}
+              </button>
+              <span className="ml-1 text-[10px] text-[var(--athanor-slate)]">
+                ({type})
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-dashed border-[var(--athanor-mist)] pt-3">
+      <h3 className="text-xs font-semibold text-[var(--athanor-ink)]">
+        Recommended adjacent nodes
+      </h3>
+      <div>
+        <p className="font-medium text-[var(--athanor-ink)]">Feeds into this node</p>
+        {renderList(feedsIn, "Typically a pipeline source — nothing upstream.")}
+      </div>
+      <div>
+        <p className="font-medium text-[var(--athanor-ink)]">This node feeds out to</p>
+        {renderList(feedsOut, "Typically a sink — nothing downstream.")}
+      </div>
+    </div>
   );
 }
