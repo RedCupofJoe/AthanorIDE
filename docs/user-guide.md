@@ -23,8 +23,9 @@ Autosave writes the open graph into the project slot after edits (debounced). Us
 | --- | --- |
 | Add a node | Palette: click once to select, click again to place (or double-click). Toggle **Compact** to hide descriptions. |
 | Connect | Drag from an output handle (right) to a compatible input (left). Hover ports for contract tooltips. |
-| Select | Click a node; Shift+click for multi-select |
-| Delete | Select → Delete/Backspace → confirm in the **right inspector** |
+| Select | Click a node; Shift+click for multi-select. Click a **wire** to select only that connection. |
+| Delete connection | Click the wire → Delete/Backspace (or **Delete connection** in the inspector) → confirm. Nodes stay. |
+| Delete node | Select the node → Delete/Backspace → confirm in the **right inspector** |
 | Undo / Redo | Ctrl/Cmd+Z and Ctrl/Cmd+Y (or Shift+Z) |
 | Duplicate | Ctrl/Cmd+D |
 | Search | Toolbar search focuses matching nodes |

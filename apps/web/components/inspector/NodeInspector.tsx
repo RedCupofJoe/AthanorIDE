@@ -24,9 +24,11 @@ type InspectorFormValues = {
 
 export function NodeInspector() {
   const selectedNodeIds = useSelectionStore((state) => state.selectedNodeIds);
+  const selectedEdgeIds = useSelectionStore((state) => state.selectedEdgeIds);
   const focusNode = useSelectionStore((state) => state.focusNode);
   const graph = useProjectStore((state) => state.graph);
   const nodes = graph.nodes;
+  const edges = graph.edges;
   const addNode = useProjectStore((state) => state.addNode);
   const updateNodeConfiguration = useProjectStore((state) => state.updateNodeConfiguration);
   const updateNodeName = useProjectStore((state) => state.updateNodeName);
@@ -172,6 +174,15 @@ export function NodeInspector() {
     );
   };
 
+  const selectedConnections = useMemo(
+    () =>
+      selectedEdgeIds
+        .filter((id) => !id.startsWith("portal-bus-"))
+        .map((id) => edges.find((edge) => edge.id === id))
+        .filter((edge): edge is NonNullable<typeof edge> => Boolean(edge)),
+    [edges, selectedEdgeIds],
+  );
+
   if (selectedMacro) {
     return (
       <aside
@@ -193,6 +204,58 @@ export function NodeInspector() {
           onClick={() => setMacroCollapsed(selectedMacro.id, false)}
         >
           Expand macro
+        </button>
+      </aside>
+    );
+  }
+
+  if (realSelectedIds.length === 0 && selectedConnections.length > 0) {
+    return (
+      <aside
+        className="flex h-full flex-col gap-3 bg-white/80 p-4"
+        aria-label="Connection inspector"
+      >
+        <div>
+          <h2 className="text-sm font-semibold">Connection</h2>
+          <p className="mt-1 text-xs text-[var(--athanor-slate)]">
+            {selectedConnections.length === 1
+              ? "Selected wire — delete removes only this connection, not the nodes."
+              : `${selectedConnections.length} connections selected — delete removes only these wires.`}
+          </p>
+        </div>
+        <ul className="space-y-2 text-xs text-[var(--athanor-slate)]">
+          {selectedConnections.map((edge) => {
+            const source = nodes.find((item) => item.id === edge.sourceNodeId);
+            const target = nodes.find((item) => item.id === edge.targetNodeId);
+            const sourcePort = source?.outputs.find((port) => port.id === edge.sourcePortId);
+            const targetPort = target?.inputs.find((port) => port.id === edge.targetPortId);
+            return (
+              <li
+                key={edge.id}
+                className="rounded border border-[var(--athanor-mist)] bg-white px-2 py-2"
+              >
+                <p className="font-medium text-[var(--athanor-ink)]">
+                  {source?.name ?? edge.sourceNodeId} → {target?.name ?? edge.targetNodeId}
+                </p>
+                <p className="mt-1">
+                  {sourcePort?.name ?? edge.sourcePortId} ({sourcePort?.contractType ?? "?"}) →{" "}
+                  {targetPort?.name ?? edge.targetPortId} ({targetPort?.contractType ?? "?"})
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          type="button"
+          className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-800 hover:bg-red-50"
+          onClick={() =>
+            requestDelete(
+              [],
+              selectedConnections.map((edge) => edge.id),
+            )
+          }
+        >
+          Delete connection{selectedConnections.length === 1 ? "" : "s"}…
         </button>
       </aside>
     );
@@ -228,8 +291,8 @@ export function NodeInspector() {
       >
         <h2 className="text-sm font-semibold">Inspector</h2>
         <p className="mt-2 text-sm text-[var(--athanor-slate)]">
-          Select a single node to edit its configuration. Press Delete on the canvas to remove
-          nodes — confirmation appears here.
+          Select a node to edit configuration, or click a connection (wire) to delete it without
+          removing its nodes. Press Delete/Backspace, then confirm here.
         </p>
       </aside>
     );

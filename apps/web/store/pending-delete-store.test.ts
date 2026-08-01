@@ -58,4 +58,34 @@ describe("pending delete store", () => {
     expect(useProjectStore.getState().graph.nodes).toHaveLength(0);
     spy.mockRestore();
   });
+
+  it("can queue an edge-only delete without nodes", () => {
+    const sourceId = useProjectStore.getState().addNode("foundation.text_input", {
+      x: 0,
+      y: 0,
+    });
+    const targetId = useProjectStore.getState().addNode("foundation.output_viewer", {
+      x: 200,
+      y: 0,
+    });
+    const source = useProjectStore.getState().graph.nodes.find((node) => node.id === sourceId)!;
+    const target = useProjectStore.getState().graph.nodes.find((node) => node.id === targetId)!;
+    const connected = useProjectStore.getState().connectPorts({
+      sourceNodeId: sourceId,
+      sourcePortId: source.outputs[0]!.id,
+      targetNodeId: targetId,
+      targetPortId: target.inputs[0]!.id,
+    });
+    expect(connected).toBe(true);
+    const edgeId = useProjectStore.getState().graph.edges[0]!.id;
+
+    usePendingDeleteStore.getState().requestDelete([], [edgeId]);
+    expect(usePendingDeleteStore.getState().pending).toEqual({
+      nodeIds: [],
+      edgeIds: [edgeId],
+    });
+    usePendingDeleteStore.getState().confirmDelete();
+    expect(useProjectStore.getState().graph.edges).toHaveLength(0);
+    expect(useProjectStore.getState().graph.nodes).toHaveLength(2);
+  });
 });

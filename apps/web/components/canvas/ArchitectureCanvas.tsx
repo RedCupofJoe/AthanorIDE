@@ -3,7 +3,13 @@
 /**
  * React Flow canvas: nodes/edges rendering, connect validation, keyboard shortcuts.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Background,
   Controls,
@@ -222,6 +228,13 @@ function CanvasInner() {
 
       const cross = isCrossEnvironmentEdge(edge, nodesById);
       const payload = edgePayloads.find((item) => item.edgeId === edge.id);
+      const isSelected =
+        selectedEdgeIds.includes(edge.id) || focusEdgeId === edge.id;
+      const sourceNode = nodesById.get(edge.sourceNodeId);
+      const sourcePort = sourceNode?.outputs.find(
+        (port) => port.id === edge.sourcePortId,
+      );
+      const contractLabel = sourcePort?.contractType ?? "link";
       const payloadLabel =
         payload && lod !== "macro"
           ? payload.value.length > 24
@@ -234,7 +247,10 @@ function CanvasInner() {
         target,
         sourceHandle,
         targetHandle,
-        selected: selectedEdgeIds.includes(edge.id) || focusEdgeId === edge.id,
+        selectable: true,
+        focusable: true,
+        interactionWidth: 28,
+        selected: isSelected,
         label:
           lod === "macro"
             ? undefined
@@ -242,13 +258,19 @@ function CanvasInner() {
               ? payloadLabel
               : cross
                 ? "cross-env"
-                : "STRING",
-        animated: cross || Boolean(payload),
-        style: cross
-          ? { stroke: "#c2410c", strokeDasharray: "6 4", strokeWidth: 2 }
-          : payload
-            ? { stroke: "#9a3412", strokeWidth: 2 }
-            : undefined,
+                : contractLabel,
+        animated: cross || Boolean(payload) || isSelected,
+        style: {
+          stroke: isSelected
+            ? "var(--athanor-ember)"
+            : cross
+              ? "#c2410c"
+              : payload
+                ? "#9a3412"
+                : "#78716c",
+          strokeWidth: isSelected ? 3 : cross || payload ? 2 : 1.75,
+          strokeDasharray: cross ? "6 4" : undefined,
+        },
         className: focusEdgeId === edge.id ? "athanor-focus-edge" : undefined,
       });
     }
@@ -428,12 +450,30 @@ function CanvasInner() {
 
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
+      const edgeIds = selectedEdges
+        .map((edge) => edge.id)
+        .filter((id) => !id.startsWith("portal-bus-"));
+      // Prefer connection-only selection when the user clicked an edge so Delete
+      // removes wires without also removing their endpoint nodes.
+      if (edgeIds.length > 0 && selectedNodes.length === 0) {
+        setSelection([], edgeIds);
+        return;
+      }
       setSelection(
         selectedNodes
           .map((node) => node.id)
           .filter((id) => !id.startsWith("swimlane:")),
-        selectedEdges.map((edge) => edge.id),
+        edgeIds,
       );
+    },
+    [setSelection],
+  );
+
+  const onEdgeClick = useCallback(
+    (event: ReactMouseEvent, edge: Edge) => {
+      if (edge.id.startsWith("portal-bus-")) return;
+      event.stopPropagation();
+      setSelection([], [edge.id]);
     },
     [setSelection],
   );
@@ -531,11 +571,18 @@ function CanvasInner() {
         const nodeIds = selection.selectedNodeIds.filter(
           (id) => !id.startsWith("macro:") && !id.startsWith("swimlane:"),
         );
-        if (nodeIds.length || selection.selectedEdgeIds.length) {
+        const edgeIds = selection.selectedEdgeIds.filter(
+          (id) => !id.startsWith("portal-bus-"),
+        );
+        if (edgeIds.length > 0) {
+          // Edge selection always deletes connections only — never endpoint nodes.
           event.preventDefault();
-          usePendingDeleteStore
-            .getState()
-            .requestDelete(nodeIds, selection.selectedEdgeIds);
+          usePendingDeleteStore.getState().requestDelete([], edgeIds);
+          return;
+        }
+        if (nodeIds.length) {
+          event.preventDefault();
+          usePendingDeleteStore.getState().requestDelete(nodeIds, []);
         }
       }
     };
@@ -560,6 +607,7 @@ function CanvasInner() {
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
         onSelectionChange={onSelectionChange}
+        onEdgeClick={onEdgeClick}
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
@@ -572,6 +620,8 @@ function CanvasInner() {
         snapGrid={[16, 16]}
         multiSelectionKeyCode="Shift"
         deleteKeyCode={null}
+        edgesFocusable
+        elementsSelectable
         selectionOnDrag
         panOnScroll
         zoomOnScroll
@@ -579,6 +629,7 @@ function CanvasInner() {
         maxZoom={2}
         onlyRenderVisibleElements
         defaultViewport={graph.viewport}
+        defaultEdgeOptions={{ interactionWidth: 28 }}
         proOptions={{ hideAttribution: true }}
         aria-label="Architecture canvas"
       >
