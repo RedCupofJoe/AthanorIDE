@@ -70,14 +70,14 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--athanor-paper)]">
+    <div className="flex h-dvh overflow-hidden flex-col bg-[var(--athanor-paper)]">
       <EditorToolbar
         onOpenInfrastructureTokens={() => setRightPanel("infra")}
         onOpenLocalVault={() => setRightPanel("vault")}
       />
       <div className="flex min-h-0 flex-1">
         <NodePalette />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1">
             <ArchitectureCanvas />
           </div>

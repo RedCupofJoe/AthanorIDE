@@ -4,6 +4,10 @@
 import type { ContractType, NodePort } from "@athanor/contracts";
 
 export type NodeCategory =
+  | "agents"
+  | "harnesses"
+  | "sandboxes"
+  | "mcp"
   | "foundation"
   | "fine-tuning"
   | "vision"
@@ -11,10 +15,11 @@ export type NodeCategory =
   | "enterprise"
   | "big-blocks";
 
-export type ConfigFieldType = "string" | "text" | "number" | "boolean" | "select";
+export type ConfigFieldType = "string" | "text" | "number" | "boolean" | "select" | "schema";
 
 /** How the exporter treats this node type. */
 export type NodeExportKind =
+  | "agent_studio"
   | "pipeline_text_source"
   | "pipeline_transform"
   | "pipeline_sink"

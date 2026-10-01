@@ -13,12 +13,13 @@ export function ValidationPanel() {
   const focusEdge = useSelectionStore((state) => state.focusEdge);
 
   return (
-    <section
-      className="border-t border-[var(--athanor-mist)] bg-white/90 px-4 py-3"
+    <details
+      open={status !== "idle"}
+      className="shrink-0 max-h-[30vh] overflow-auto border-t border-[var(--athanor-mist)] bg-white/90 px-4 py-2"
       aria-live="polite"
       aria-label="Validation results"
     >
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <summary className="flex cursor-pointer items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">Validation</h2>
         <p className="text-xs text-[var(--athanor-slate)]">
           {status === "idle" && "Not validated yet"}
@@ -29,7 +30,7 @@ export function ValidationPanel() {
               : `${issues.filter((i) => i.severity === "error").length} error(s)`)}
           {status === "error" && (errorMessage ?? "Validation failed")}
         </p>
-      </div>
+      </summary>
 
       {issues.length === 0 ? (
         <p className="text-sm text-[var(--athanor-slate)]">
@@ -71,6 +72,6 @@ export function ValidationPanel() {
           ))}
         </ul>
       )}
-    </section>
+    </details>
   );
 }

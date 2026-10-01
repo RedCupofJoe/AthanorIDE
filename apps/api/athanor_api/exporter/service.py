@@ -73,7 +73,7 @@ def build_zip_archive(files: dict[str, str]) -> bytes:
             info = zipfile.ZipInfo(filename=path)
             # Fixed timestamp keeps ZIP bytes deterministic across exports.
             info.date_time = (2026, 7, 24, 0, 0, 0)
-            if path.startswith("scripts/") and path.endswith(".sh"):
+            if (path.startswith("scripts/") and path.endswith(".sh")) or path == "bin/cli.mjs":
                 info.external_attr = (0o755 & 0xFFFF) << 16
             archive.writestr(info, files[path].encode("utf-8"))
     return buffer.getvalue()
@@ -82,6 +82,7 @@ def build_zip_archive(files: dict[str, str]) -> bytes:
 def export_architecture_graph(
     graph: ArchitectureGraph,
     *,
+    export_format: str = "code",
     include_docker_compat: bool = False,
     include_kubernetes: bool = False,
     include_openshift: bool = False,
@@ -106,7 +107,10 @@ def export_architecture_graph(
         include_terraform=include_terraform,
         project_slug=project_slug,
     )
-    files = render_export_files(ir)
+    try:
+        files = render_export_files(ir, export_format)
+    except ValueError as exc:
+        raise ExportError(str(exc), validation_issues=validation_issues) from exc
     generation_issues = validate_generated_files(files)
     if generation_issues:
         raise ExportError(
@@ -142,5 +146,5 @@ def write_export_to_directory(result: ExportResult, destination: str) -> None:
         target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        if path.startswith("scripts/") and path.endswith(".sh"):
+        if (path.startswith("scripts/") and path.endswith(".sh")) or path == "bin/cli.mjs":
             target.chmod(0o755)

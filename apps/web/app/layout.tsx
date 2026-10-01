@@ -17,7 +17,7 @@ const sans = Source_Sans_3({
 export const metadata: Metadata = {
   title: "AthanorIDE",
   description:
-    "Local-first visual IDE for AI solution architects — typed graphs, validation, and export.",
+    "Visual workbench for sandboxed agents, harnesses, and MCP servers — typed graphs, validation, and export.",
 };
 
 export default function RootLayout({

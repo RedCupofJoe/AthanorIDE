@@ -94,6 +94,10 @@ export function evaluateConnection(params: {
     };
   }
 
+  if (params.edges.some(edge => edge.sourceNodeId === params.sourceNodeId && edge.sourcePortId === params.sourcePortId && edge.targetNodeId === params.targetNodeId && edge.targetPortId === params.targetPortId)) {
+    return { ok: false, reason: "These ports are already connected." };
+  }
+
   if (!targetPort.multiple) {
     const occupied = params.edges.some(
       (edge) =>
@@ -113,7 +117,7 @@ export function evaluateConnection(params: {
   ) {
     return {
       ok: false,
-      reason: "This connection would create a cycle. Phase 1 pipelines must be acyclic.",
+      reason: "This connection would create a cycle. Keep the canvas acyclic; bounded agent loops run inside the agent block.",
     };
   }
 

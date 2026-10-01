@@ -1,0 +1,350 @@
+"""Run the exported graph with an isolated worker per agent/harness, or serve MCP."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import queue
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import uuid
+
+ROOT = Path(__file__).resolve().parent
+GRAPH_PATH = ROOT / "agent-workflow.json"
+IMAGE = os.environ.get("ATHANOR_IMAGE", "localhost/athanor-agent:latest")
+MAX_LINE = 4_000_000
+
+
+def connected(graph, node, port):
+    ports = {p["id"] for p in node["inputs"] if p["name"] == port}
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    return [
+        nodes[e["sourceNodeId"]]
+        for e in graph["edges"]
+        if e["targetNodeId"] == node["id"] and e["targetPortId"] in ports
+    ]
+
+
+def sandbox_command(sandbox, name, *, image=IMAGE):
+    runtime = sandbox["type"].split(".", 1)[1]
+    if runtime == "firecracker":
+        raise RuntimeError(
+            "Firecracker requires a provisioned microVM adapter. See agent-deployment.json. No fallback is permitted."
+        )
+    engine = {
+        "podman": "podman",
+        "docker": "docker",
+        "gvisor": "docker",
+        "kata": "podman",
+    }.get(runtime)
+    if not engine:
+        raise ValueError("Unsupported sandbox")
+    cfg = sandbox["configuration"]
+    if cfg["network"] not in {"none", "bridge"}:
+        raise ValueError("Unsupported network mode")
+    command = [
+        engine,
+        "run",
+        "--rm",
+        "-i",
+        "--name",
+        name,
+        "--pull=never",
+        "--read-only",
+        "--user",
+        "65532:65532",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--network",
+        cfg["network"],
+        "--memory",
+        f"{int(cfg['memoryMb'])}m",
+        "--memory-swap",
+        f"{int(cfg['memoryMb'])}m",
+        "--cpus",
+        str(cfg["cpus"]),
+        "--pids-limit",
+        str(int(cfg["pidsLimit"])),
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,size=64m",
+    ]
+    if runtime == "gvisor":
+        command += ["--runtime=runsc"]
+    if runtime == "kata":
+        command += ["--runtime=kata-runtime"]
+    return command
+
+
+def require_engine(command):
+    if not shutil.which(command[0]):
+        raise RuntimeError(
+            f"Install {command[0]} and the selected runtime. Host execution is disabled."
+        )
+    if command[0] == "podman":
+        check = subprocess.run(
+            ["podman", "info", "--format", "{{.Host.Security.Rootless}}"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=15,
+        )
+        if check.stdout.strip() != "true":
+            raise RuntimeError("Use rootless Podman for this exported launcher.")
+
+
+def dependencies(graph, node):
+    found = {node["id"]}
+    pending = [node]
+    while pending:
+        current = pending.pop()
+        for port in current["inputs"]:
+            for source in connected(graph, current, port["name"]):
+                if source["id"] not in found:
+                    found.add(source["id"])
+                    pending.append(source)
+    return [n for n in graph["nodes"] if n["id"] in found]
+
+
+def credential_args(nodes):
+    args = []
+    names = {n["configuration"].get("secretName") for n in nodes} - {None, ""}
+    for node in nodes:
+        names.update(
+            name.strip()
+            for name in node["configuration"].get("environmentNames", "").split(",")
+            if name.strip()
+        )
+    for name in sorted(names):
+        if name not in os.environ:
+            raise RuntimeError(f"Set environment variable {name} before running")
+        args += [
+            "--env",
+            name,
+        ]  # Only names appear in argv; values come from the environment.
+    return args
+
+
+def human_approval(event):
+    if not sys.stdin.isatty():
+        return False
+    print(
+        f"Approve tool {event['tool']} with arguments {json.dumps(event['arguments'])}? Type yes:",
+        file=sys.stderr,
+        flush=True,
+    )
+    return sys.stdin.readline().strip() == "yes"
+
+
+def run_isolated(graph, node, task, approval=human_approval):
+    sandbox = connected(graph, node, "sandbox")[0]
+    name = "athanor-" + uuid.uuid4().hex
+    command = sandbox_command(sandbox, name)
+    require_engine(command)
+    selected = dependencies(graph, node)
+    command += credential_args(selected) + [IMAGE, "python", "-m", "app.agent_worker"]
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        bufsize=1,
+    )
+    events = queue.Queue(maxsize=128)
+    deadline = time.monotonic() + float(node["configuration"]["timeoutSeconds"])
+
+    def read_events():
+        try:
+            while True:
+                line = process.stdout.readline(MAX_LINE + 1)
+                if not line:
+                    break
+                if len(line) > MAX_LINE:
+                    events.put(
+                        {"kind": "error", "message": "Worker output exceeds limit"}
+                    )
+                    return
+                events.put(json.loads(line))
+        except Exception:
+            events.put({"kind": "error", "message": "Invalid worker response"})
+        finally:
+            events.put({"kind": "eof"})
+
+    try:
+        subset = {
+            **graph,
+            "nodes": selected,
+            "edges": [
+                e
+                for e in graph["edges"]
+                if e["sourceNodeId"] in {n["id"] for n in selected}
+                and e["targetNodeId"] in {n["id"] for n in selected}
+            ],
+        }
+        process.stdin.write(
+            json.dumps({"graph": subset, "node": node, "task": task}) + "\n"
+        )
+        process.stdin.flush()
+        threading.Thread(target=read_events, daemon=True).start()
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Agent run timeout exceeded")
+            try:
+                event = events.get(timeout=remaining)
+            except queue.Empty:
+                raise TimeoutError("Agent run timeout exceeded") from None
+            if event["kind"] == "approval":
+                # Human input must not suspend the worker's wall-clock timeout.
+                def decide(request=event):
+                    events.put(
+                        {
+                            "kind": "approval_decision",
+                            "approved": bool(approval(request)),
+                        }
+                    )
+
+                threading.Thread(target=decide, daemon=True).start()
+            elif event["kind"] == "approval_decision":
+                process.stdin.write(json.dumps({"approved": event["approved"]}) + "\n")
+                process.stdin.flush()
+            elif event["kind"] == "event":
+                print(json.dumps(event), file=sys.stderr)
+            elif event["kind"] == "result":
+                return event["output"]
+            elif event["kind"] in {"error", "eof"}:
+                raise RuntimeError(
+                    event.get(
+                        "message",
+                        "Worker exited without a result. Check the built image and runtime.",
+                    )
+                )
+    finally:
+        # Killing the client alone may leave a container running: remove by unique run name.
+        try:
+            subprocess.run(
+                [command[0], "rm", "--force", name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
+            )
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=5)
+            process.stdin.close()
+            process.stdout.close()
+
+
+def run_workflow(graph, task_override=None, runner=run_isolated):
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    pending = list(nodes)
+    values = {}
+    results = {}
+    while pending:
+        ready = [
+            nid
+            for nid in pending
+            if all(
+                e["sourceNodeId"] in values
+                for e in graph["edges"]
+                if e["targetNodeId"] == nid
+            )
+        ]
+        if not ready:
+            raise ValueError("Workflow contains a cycle or missing source")
+        for nid in ready:
+            node = nodes[nid]
+            cfg = node["configuration"]
+            inbound = {
+                next(
+                    p["name"] for p in node["inputs"] if p["id"] == e["targetPortId"]
+                ): values[e["sourceNodeId"]]
+                for e in graph["edges"]
+                if e["targetNodeId"] == nid
+            }
+            kind = node["type"]
+            if kind == "foundation.text_input":
+                value = task_override if task_override is not None else cfg["value"]
+            elif kind == "foundation.json_input":
+                value = cfg["json"]
+            elif kind == "foundation.prompt_template":
+                value = cfg["template"].replace(
+                    "{{input}}", str(inbound.get("variables", ""))
+                )
+            elif kind == "foundation.output_viewer":
+                value = inbound.get("text", "")
+                results[nid] = value
+            elif kind == "agent.sandboxed" or kind.startswith("harness."):
+                value = runner(graph, node, str(inbound["task"]))
+                results[nid] = value
+            elif kind.startswith(("sandbox.", "mcp.", "agent.")):
+                value = cfg  # Declaration consumed by its downstream runtime, never host execution.
+            else:
+                raise ValueError(
+                    f"No agent-workflow executor for {kind}; use its legacy export or extend workflow.py"
+                )
+            values[nid] = value
+            pending.remove(nid)
+    return results
+
+
+def serve_mcp(graph, node_id):
+    node = next(
+        n for n in graph["nodes"] if n["id"] == node_id and n["type"] == "mcp.server"
+    )
+    sandbox = connected(graph, node, "sandbox")[0]
+    name = "athanor-mcp-" + uuid.uuid4().hex
+    command = sandbox_command(sandbox, name)
+    require_engine(command)
+    command += credential_args(dependencies(graph, node))
+    if node["configuration"]["transport"] == "streamable-http":
+        port = int(node["configuration"]["port"])
+        command += ["--publish", f"127.0.0.1:{port}:{port}"]
+    command += [IMAGE, "python", "-m", "app.mcp_server", node_id]
+    try:
+        subprocess.run(command, check=True)
+    finally:
+        subprocess.run(
+            [command[0], "rm", "--force", name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+        )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=["plan", "run", "serve-mcp"])
+    parser.add_argument("--task")
+    parser.add_argument("--node", help="MCP server node ID")
+    args = parser.parse_args()
+    graph = json.loads(GRAPH_PATH.read_text())
+    if args.command == "plan":
+        print(
+            json.dumps(
+                {
+                    "nodes": [
+                        {"id": n["id"], "name": n["name"], "type": n["type"]}
+                        for n in graph["nodes"]
+                    ],
+                    "edges": graph["edges"],
+                },
+                indent=2,
+            )
+        )
+    elif args.command == "serve-mcp":
+        if not args.node:
+            parser.error("serve-mcp requires --node")
+        serve_mcp(graph, args.node)
+    else:
+        print(json.dumps(run_workflow(graph, args.task), indent=2))
+
+
+if __name__ == "__main__":
+    main()

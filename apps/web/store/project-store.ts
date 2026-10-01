@@ -13,7 +13,10 @@ import {
 } from "@athanor/contracts";
 import { createNodeFromDefinition } from "@athanor/node-definitions";
 import { create } from "zustand";
+import { useSelectionStore } from "./selection-store";
+import { useConnectionDraftStore } from "./connection-draft-store";
 
+import { materializeBlockTemplate, type BlockTemplate } from "@/lib/block-templates";
 import { evaluateConnection } from "@/lib/graph-utils";
 import { buildCollapsedMacro } from "@/lib/macros";
 import { loadPersistedGraph, persistGraph } from "@/lib/persistence";
@@ -56,6 +59,7 @@ interface ProjectStore {
   openProject: (projectId: string) => boolean;
   setProjectName: (name: string) => void;
   replaceGraph: (graph: ArchitectureGraph, recordHistory?: boolean) => void;
+  addTemplate: (template: BlockTemplate) => string;
   addNode: (type: string, position?: { x: number; y: number }) => string;
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
   beginGesture: () => void;
@@ -72,6 +76,7 @@ interface ProjectStore {
   upsertInfrastructureToken: (slot: InfrastructureTokenSlot) => void;
   removeInfrastructureToken: (slotId: string) => void;
   deleteSelection: (nodeIds: string[], edgeIds: string[]) => void;
+  reconnectPorts: (edgeId: string, params: { sourceNodeId: string; sourcePortId: string; targetNodeId: string; targetPortId: string }) => boolean;
   connectPorts: (params: {
     sourceNodeId: string;
     sourcePortId: string;
@@ -181,7 +186,7 @@ function pruneMacros(
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
-  graph: createEmptyGraph("Text Transformation"),
+  graph: createEmptyGraph("Agent Workspace"),
   past: [],
   future: [],
   connectionError: null,
@@ -260,6 +265,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       schedulePersist(next);
       return { ...history, graph: next, connectionError: null };
     });
+  },
+
+  addTemplate: (template) => {
+    const node = withSyncedPortalPorts(materializeBlockTemplate(template, { x: 120, y: 120 }));
+    set((state) => {
+      const graph = touch(withPortalSync({ ...state.graph, nodes: [...state.graph.nodes, node] }));
+      schedulePersist(graph);
+      return { ...pushHistory(state), graph };
+    });
+    return node.id;
   },
 
   addNode: (type, position = { x: 120, y: 120 }) => {
@@ -442,8 +457,27 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         }),
       );
       schedulePersist(graph);
-      return { ...history, graph };
+      return { ...history, graph, connectionError: null };
     });
+    const remaining = get().graph;
+    const selection = useSelectionStore.getState();
+    selection.setSelection(selection.selectedNodeIds.filter(id => remaining.nodes.some(n => n.id === id)), selection.selectedEdgeIds.filter(id => remaining.edges.some(e => e.id === id)));
+    useConnectionDraftStore.getState().clearDraft();
+  },
+
+  reconnectPorts: (edgeId, params) => {
+    const state = get();
+    const existing = state.graph.edges.find(edge => edge.id === edgeId);
+    if (!existing) return false;
+    if (existing.sourceNodeId === params.sourceNodeId && existing.sourcePortId === params.sourcePortId && existing.targetNodeId === params.targetNodeId && existing.targetPortId === params.targetPortId) return true;
+    const decision = evaluateConnection({ nodes: state.graph.nodes, edges: state.graph.edges.filter(edge => edge.id !== edgeId), ...params });
+    if (!decision.ok) { set({ connectionError: decision.reason }); return false; }
+    set(current => {
+      const graph = touch({ ...current.graph, edges: current.graph.edges.map(edge => edge.id === edgeId ? { ...edge, ...params } : edge) });
+      schedulePersist(graph);
+      return { ...pushHistory(current), graph, connectionError: null };
+    });
+    return true;
   },
 
   connectPorts: ({ sourceNodeId, sourcePortId, targetNodeId, targetPortId }) => {

@@ -21,12 +21,13 @@ export function ExecutionPanel() {
   const focusNode = useSelectionStore((state) => state.focusNode);
 
   return (
-    <section
-      className="border-t border-[var(--athanor-mist)] bg-white/90 px-4 py-3"
+    <details
+      open={status !== "idle"}
+      className="shrink-0 max-h-[30vh] overflow-auto border-t border-[var(--athanor-mist)] bg-white/90 px-4 py-2"
       aria-live="polite"
       aria-label="Execution debug"
     >
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <summary className="flex cursor-pointer items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">Execution</h2>
         <p className="text-xs text-[var(--athanor-slate)]">
           {status === "idle" && "Not run yet"}
@@ -35,12 +36,11 @@ export function ExecutionPanel() {
             `${runStatus ?? "done"}${durationMs != null ? ` · ${durationMs.toFixed(1)} ms` : ""}`}
           {status === "error" && (errorMessage ?? "Execution failed")}
         </p>
-      </div>
+      </summary>
 
       {status === "idle" && (
         <p className="text-sm text-[var(--athanor-slate)]">
-          Click Run to inspect payloads flowing between nodes. Compiled transforms use the Podman
-          sandbox; secrets stay redacted.
+          Run preview checks the design without calling models or tools. Export to execute your agent in its sandbox.
         </p>
       )}
 
@@ -108,6 +108,6 @@ export function ExecutionPanel() {
           })}
         </ul>
       )}
-    </section>
+    </details>
   );
 }

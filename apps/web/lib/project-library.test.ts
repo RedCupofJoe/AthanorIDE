@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  LEGACY_STORAGE_KEY,
   PROJECT_INDEX_KEY,
   createProject,
   deleteProject,
   listProjectSummaries,
   loadProjectGraph,
-  migrateLegacyProjectIfNeeded,
   renameProject,
   saveProjectGraph,
 } from "./project-library";
@@ -78,28 +76,10 @@ describe("project library", () => {
     expect(window.localStorage.getItem(PROJECT_INDEX_KEY)).toContain(created.project.id);
   });
 
-  it("migrates the legacy single-project key", () => {
-    const legacy = {
-      schemaVersion: "1.0.0",
-      project: {
-        id: "legacy-1",
-        name: "Legacy",
-        createdAt: "2026-07-24T14:00:00.000Z",
-        updatedAt: "2026-07-24T14:00:00.000Z",
-      },
-      nodes: [],
-      edges: [],
-      contracts: [],
-      deploymentEnvironments: [],
-      macroBlocks: [],
-      portalBuses: [],
-      validationResults: [],
-      viewport: { x: 0, y: 0, zoom: 1 },
-    };
-    window.localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(legacy));
-    migrateLegacyProjectIfNeeded();
-    expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
-    expect(loadProjectGraph("legacy-1")?.project.name).toBe("Legacy");
-    expect(listProjectSummaries()[0]?.id).toBe("legacy-1");
+  it("starts a fresh agent library without migrating legacy projects", () => {
+    window.localStorage.setItem("athanoride.projects.index.v1", JSON.stringify({ version: 1, activeId: "legacy", entries: [{ id: "legacy", name: "Old architecture" }] }));
+    window.localStorage.setItem("athanoride.project.v1", "legacy content");
+    expect(listProjectSummaries()).toEqual([]);
+    expect(loadProjectGraph("legacy")).toBeNull();
   });
 });

@@ -18,6 +18,7 @@ from athanor_api.schemas.graph import (
     ValidationIssue,
 )
 from athanor_api.secret_scan import text_contains_embedded_secret
+from athanor_api.validation.agent_studio import validate_agent_studio
 from athanor_api.validation.contracts import contract_compatibility_reason
 
 PORTAL_TYPES = {"foundation.portal_input", "foundation.portal_output"}
@@ -620,6 +621,7 @@ def validate_architecture_graph(graph: ArchitectureGraph) -> list[ValidationIssu
                 )
             )
 
+    issues.extend(validate_agent_studio(graph))
     issues.extend(_validate_portals(graph))
     issues.extend(_validate_macros(graph))
     issues.extend(_validate_cross_environment_edges(graph))

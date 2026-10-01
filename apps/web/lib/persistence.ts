@@ -14,9 +14,6 @@ import {
   saveProjectGraph,
 } from "./project-library";
 
-/** @deprecated Prefer project-library keyed storage; kept for migration compatibility. */
-export const STORAGE_KEY = "athanoride.project.v1";
-
 export function loadPersistedGraph(): ArchitectureGraph | null {
   const activeId = getActiveProjectId();
   if (activeId) {

@@ -3,8 +3,8 @@
 /**
  * Primary architecture node renderer (LOD-aware ports, health, payload preview).
  */
-import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { memo, useEffect } from "react";
+import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
 import { type ArchitectureNode } from "@athanor/contracts";
 import { getNodeDefinition } from "@athanor/node-definitions";
 import {
@@ -125,6 +125,8 @@ function FoundationNodeComponent({ id, data, selected }: NodeProps) {
     payloadPreview,
     executionStatus,
   } = data as ArchitectureFlowNodeData;
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect(() => { updateNodeInternals(id); }, [id, lod, architectureNode.inputs, architectureNode.outputs, updateNodeInternals]);
   const definition = getNodeDefinition(architectureNode.type);
   const iconKey = (definition?.icon ?? "type") as keyof typeof ICONS;
   const Icon = ICONS[iconKey] ?? Type;
@@ -158,6 +160,7 @@ function FoundationNodeComponent({ id, data, selected }: NodeProps) {
             type="target"
             position={Position.Left}
             className="!opacity-0"
+            isConnectable={false}
           />
         ))}
         {architectureNode.outputs.map((port) => (
@@ -167,6 +170,7 @@ function FoundationNodeComponent({ id, data, selected }: NodeProps) {
             type="source"
             position={Position.Right}
             className="!opacity-0"
+            isConnectable={false}
           />
         ))}
         {architectureNode.type === "foundation.portal_output" && (
@@ -194,7 +198,7 @@ function FoundationNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <article
       className={cn(
-        "min-w-[220px] rounded-lg border bg-white/95 shadow-sm",
+        "w-[280px] rounded-lg border bg-white/95 shadow-sm",
         selected
           ? "border-[var(--athanor-ember)] ring-2 ring-orange-200"
           : "border-[var(--athanor-mist)]",

@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { getNodeDefinition } from "@athanor/node-definitions";
 
+import { ToolSchemaEditor } from "./ToolSchemaEditor";
+import { useBlockTemplateStore } from "@/store/block-template-store";
 import { compileTransformation } from "@/lib/compiler";
 import {
   findLinkedPortalNodes,
@@ -23,6 +25,9 @@ type InspectorFormValues = {
 };
 
 export function NodeInspector() {
+  const saveTemplate = useBlockTemplateStore((state) => state.save);
+  const templateError = useBlockTemplateStore((state) => state.error);
+  const [templateMessage, setTemplateMessage] = useState<string | null>(null);
   const selectedNodeIds = useSelectionStore((state) => state.selectedNodeIds);
   const selectedEdgeIds = useSelectionStore((state) => state.selectedEdgeIds);
   const focusNode = useSelectionStore((state) => state.focusNode);
@@ -36,6 +41,7 @@ export function NodeInspector() {
     (state) => state.updateNodeDeploymentTarget,
   );
   const setMacroCollapsed = useProjectStore((state) => state.setMacroCollapsed);
+  const disconnect = useProjectStore(state => state.deleteSelection);
   const requestDelete = usePendingDeleteStore((state) => state.requestDelete);
   const [compiling, setCompiling] = useState(false);
   const [compileMessage, setCompileMessage] = useState<string | null>(null);
@@ -97,7 +103,7 @@ export function NodeInspector() {
     return { name: node.name, configuration };
   }, [definition, node]);
 
-  const { register, handleSubmit, reset, getValues, watch } = useForm<InspectorFormValues>({
+  const { register, handleSubmit, reset, getValues, watch, setValue, formState: { errors } } = useForm<InspectorFormValues>({
     values: formValues,
   });
 
@@ -121,13 +127,16 @@ export function NodeInspector() {
   ) => {
     if (!fieldVisible(field)) return null;
     return (
-    <label key={field.key} className="block space-y-1 text-sm">
+    <div key={field.key} className="block space-y-1 text-sm">
       <span className="font-medium">{field.label}</span>
       <span className="block text-xs text-[var(--athanor-slate)]">{field.description}</span>
-      {field.type === "text" ? (
+      {field.type === "schema" ? (
+        <ToolSchemaEditor value={watchedConfiguration?.[field.key] ?? String(field.defaultValue)} onChange={value => setValue(`configuration.${field.key}`, value, { shouldDirty: true })} />
+      ) : field.type === "text" ? (
         <textarea
           rows={5}
           className="w-full rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5"
+          aria-label={field.label}
           {...register(`configuration.${field.key}`, {
             required: field.required,
           })}
@@ -135,6 +144,7 @@ export function NodeInspector() {
       ) : field.type === "select" && field.options ? (
         <select
           className="w-full rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5"
+          aria-label={field.label}
           {...register(`configuration.${field.key}`, {
             required: field.required,
           })}
@@ -148,6 +158,7 @@ export function NodeInspector() {
       ) : field.type === "boolean" ? (
         <select
           className="w-full rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5"
+          aria-label={field.label}
           {...register(`configuration.${field.key}`, {
             required: field.required,
           })}
@@ -160,6 +171,7 @@ export function NodeInspector() {
           type={field.type === "number" ? "number" : "text"}
           step={field.type === "number" ? "any" : undefined}
           className="w-full rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5"
+          aria-label={field.label}
           {...register(`configuration.${field.key}`, {
             required: field.required,
           })}
@@ -170,7 +182,8 @@ export function NodeInspector() {
           Tip: {field.recommendedDefaultExplanation}
         </span>
       )}
-    </label>
+      {errors.configuration?.[field.key] && <p role="alert" className="text-xs text-red-700">This field is required.</p>}
+    </div>
     );
   };
 
@@ -249,13 +262,10 @@ export function NodeInspector() {
           type="button"
           className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-800 hover:bg-red-50"
           onClick={() =>
-            requestDelete(
-              [],
-              selectedConnections.map((edge) => edge.id),
-            )
+            disconnect([], selectedConnections.map((edge) => edge.id))
           }
         >
-          Delete connection{selectedConnections.length === 1 ? "" : "s"}…
+          Disconnect{selectedConnections.length === 1 ? " connection" : " connections"}
         </button>
       </aside>
     );
@@ -437,6 +447,22 @@ export function NodeInspector() {
           </button>
         </div>
       </form>
+
+      <section className="space-y-2 border-t border-[var(--athanor-mist)] pt-3">
+        <h3 className="text-sm font-medium">Connections</h3>
+        <p className="text-xs text-[var(--athanor-slate)]">Drag a wire endpoint to reconnect. Disconnecting is reversible with Undo.</p>
+        {edges.filter(edge => edge.sourceNodeId === node.id || edge.targetNodeId === node.id).map(edge => <div key={edge.id} className="flex items-center justify-between gap-2 text-xs">
+          <span className="min-w-0 break-words">{nodes.find(n => n.id === edge.sourceNodeId)?.name} → {nodes.find(n => n.id === edge.targetNodeId)?.name}</span>
+          <button type="button" className="shrink-0 text-red-700 underline" onClick={() => disconnect([], [edge.id])}>Disconnect</button>
+        </div>)}
+      </section>
+
+      <section className="space-y-2 border-t border-[var(--athanor-mist)] pt-3">
+        <button type="button" className="rounded border border-[var(--athanor-mist)] px-3 py-1.5 text-sm" onClick={() => { saveTemplate(node); setTemplateMessage("Saved applied configuration to My blocks."); }}>
+          Save applied block as template
+        </button>
+        {(templateError || templateMessage) && <p role="status" className="text-xs text-[var(--athanor-slate)]">{templateError ?? templateMessage}</p>}
+      </section>
 
       {isPortalNode(node) && (
         <section className="space-y-2 border-t border-[var(--athanor-mist)] pt-3 text-sm">

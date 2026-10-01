@@ -24,7 +24,7 @@ def validate_generated_files(files: dict[str, str]) -> list[GeneratedFileIssue]:
                 json.loads(content)
             except json.JSONDecodeError as exc:
                 issues.append(GeneratedFileIssue(path, f"Invalid JSON: {exc.msg}"))
-        elif path.endswith((".yaml", ".yml")):
+        elif path.endswith((".yaml", ".yml")) and "/templates/" not in path:
             try:
                 list(yaml.safe_load_all(content))
             except yaml.YAMLError as exc:
@@ -48,6 +48,18 @@ def validate_generated_files(files: dict[str, str]) -> list[GeneratedFileIssue]:
         "tests/test_contracts.py",
         "docs/generated-graph.json",
     ]
+    if "agent-workflow.json" in files:
+        required = [
+            "README.md",
+            "AGENT_README.md",
+            "workflow.py",
+            "app/agent_worker.py",
+            "app/mcp_server.py",
+            "Containerfile.agent",
+            "agent.env.example",
+            "requirements-agent.txt",
+            "container_entry.py",
+        ]
     for path in required:
         if path not in files:
             issues.append(GeneratedFileIssue(path, "Required generated file is missing"))

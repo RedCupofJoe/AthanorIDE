@@ -247,6 +247,7 @@ async def export_project(body: ExportProjectRequest) -> ExportProjectResponse:
     try:
         result = export_architecture_graph(
             body.graph,
+            export_format=body.export_format,
             include_docker_compat=body.include_docker_compat,
             include_kubernetes=body.include_kubernetes,
             include_openshift=body.include_openshift,

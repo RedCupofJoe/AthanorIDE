@@ -1,0 +1,174 @@
+"""MCP tools, resources, and prompts from connected graph blocks (official SDK v2)."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+from pathlib import Path
+import sys
+
+import mcp_types as types
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.server.transport_security import TransportSecuritySettings
+import uvicorn
+
+from app.agent_worker import call_api_tool, connected
+
+
+async def deny_approval(name, arguments):
+    # Never accept approval from a model-supplied argument or an MCP annotation.
+    return False
+
+
+def build_server(graph, node):
+    tools = {
+        n["configuration"]["toolName"]: n["configuration"]
+        for n in connected(graph, node, "tools")
+    }
+    resources = {
+        n["configuration"]["uri"]: n["configuration"]
+        for n in connected(graph, node, "resources")
+    }
+    prompts = {
+        n["configuration"]["promptName"]: n["configuration"]
+        for n in connected(graph, node, "prompts")
+    }
+
+    async def list_tools(ctx, params):
+        return types.ListToolsResult(
+            tools=[
+                types.Tool(
+                    name=name,
+                    description=cfg["description"],
+                    input_schema=json.loads(cfg["inputSchema"]),
+                )
+                for name, cfg in tools.items()
+            ]
+        )
+
+    async def call_tool(ctx, params):
+        if params.name not in tools:
+            raise ValueError("Unknown tool")
+        try:
+            value = await call_api_tool(
+                tools[params.name], params.arguments or {}, deny_approval
+            )
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text=json.dumps(value))]
+            )
+        except Exception:
+            return types.CallToolResult(
+                is_error=True,
+                content=[
+                    types.TextContent(
+                        type="text",
+                        text="Tool call failed or requires host approval. No credentials or response body are logged.",
+                    )
+                ],
+            )
+
+    async def list_resources(ctx, params):
+        return types.ListResourcesResult(
+            resources=[
+                types.Resource(
+                    uri=uri, name=cfg["resourceName"], mime_type="text/plain"
+                )
+                for uri, cfg in resources.items()
+            ]
+        )
+
+    async def read_resource(ctx, params):
+        if params.uri not in resources:
+            raise ValueError("Unknown resource")
+        return types.ReadResourceResult(
+            contents=[
+                types.TextResourceContents(
+                    uri=params.uri,
+                    mime_type="text/plain",
+                    text=resources[params.uri]["content"],
+                )
+            ]
+        )
+
+    async def list_prompts(ctx, params):
+        return types.ListPromptsResult(
+            prompts=[
+                types.Prompt(
+                    name=name,
+                    arguments=[types.PromptArgument(name="task", required=True)],
+                )
+                for name in prompts
+            ]
+        )
+
+    async def get_prompt(ctx, params):
+        if (
+            params.name not in prompts
+            or not params.arguments
+            or "task" not in params.arguments
+        ):
+            raise ValueError("Unknown prompt or missing task argument")
+        text = prompts[params.name]["template"].replace(
+            "{{task}}", params.arguments["task"]
+        )
+        return types.GetPromptResult(
+            messages=[
+                types.PromptMessage(
+                    role="user", content=types.TextContent(type="text", text=text)
+                )
+            ]
+        )
+
+    return Server(
+        node["configuration"]["serverName"],
+        version="1.0.0",
+        on_list_tools=list_tools,
+        on_call_tool=call_tool,
+        on_list_resources=list_resources,
+        on_read_resource=read_resource,
+        on_list_prompts=list_prompts,
+        on_get_prompt=get_prompt,
+    )
+
+
+def http_app(server):
+    security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=os.environ.get(
+            "MCP_ALLOWED_HOSTS", "127.0.0.1:*,localhost:*"
+        ).split(","),
+        allowed_origins=["http://127.0.0.1:*", "http://localhost:*"],
+    )
+    return server.streamable_http_app(
+        json_response=True, stateless_http=True, transport_security=security
+    )
+
+
+async def serve(graph, node):
+    server = build_server(graph, node)
+    config = node["configuration"]
+    if config["transport"] == "stdio":
+        async with stdio_server() as (read, write):
+            await server.run(read, write, server.create_initialization_options())
+        return
+    # Bind inside the container; workflow.py publishes on host loopback only.
+    await uvicorn.Server(
+        uvicorn.Config(
+            http_app(server),
+            host="0.0.0.0",
+            port=int(config["port"]),
+            log_level="warning",
+        )
+    ).serve()
+
+
+if __name__ == "__main__":
+    graph = json.loads(Path("/workspace/agent-workflow.json").read_text())
+    node = next(
+        n
+        for n in graph["nodes"]
+        if n["id"] == sys.argv[1] and n["type"] == "mcp.server"
+    )
+    asyncio.run(serve(graph, node))

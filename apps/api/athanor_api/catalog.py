@@ -6,6 +6,8 @@ This module mirrors summaries + required configuration for validation/export.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from dataclasses import dataclass
 
 from athanor_api.schemas.api import NodeDefinitionSummary
@@ -52,7 +54,7 @@ NODE_CATALOG: tuple[NodeCatalogEntry, ...] = (
         display_name="Prompt Template",
         category="foundation",
         version="1.0.0",
-        description="Prompt Template renders a PROMPT from a template string and an optional STRING variables input. Put placeholders such as {{input}} in the template, connect upstream text when substitution is needed, and feed the PROMPT output into agents, vision models, or other prompt-aware nodes. It makes prompt structure explicit and reviewable on the canvas.",
+        description="Prompt Template renders prompt text from a template string and an optional STRING variables input. Put placeholders such as {{input}} in the template, connect upstream text when substitution is needed, and feed the STRING output into agents, vision models, or other prompt-aware nodes. It makes prompt structure explicit and reviewable on the canvas.",
         icon="message-square",
         required_config=("template",),
         export_kind="prompt_template",
@@ -604,6 +606,18 @@ NODE_CATALOG: tuple[NodeCatalogEntry, ...] = (
         export_kind="big_blocks",
         documentation="Best used early when security or platform teams need a first-pass agentic or model guardrail grounded in their own policy corpus rather than a generic template. Restrictive posture suits regulated or high-risk agents; standard adapts common guardrail patterns to explicit allow/deny language in the org docs; permissive only blocks behaviors the policies clearly forbid; custom lets authors paste a full system prompt into the node. Keep the local vector store small (hundreds of docs), bind larger generation models through local or remote API endpoints with token secret names, and wire guardrailPolicy into Policy Guardrail or Agentic Harness. Big Blocks are lineage and export only — Run does not fetch policies, embed chunks, or call models in the IDE.",
     ),
+)
+
+# Generated from the TypeScript catalog by scripts/sync-agent-catalog.mjs.
+AGENT_DEFINITIONS = json.loads(Path(__file__).with_name("agent_catalog.json").read_text())
+AGENT_DEFINITIONS_BY_TYPE = {item["type"]: item for item in AGENT_DEFINITIONS}
+NODE_CATALOG += tuple(
+    NodeCatalogEntry(
+        type=item["type"], display_name=item["displayName"], category=item["category"],
+        version=item["version"], description=item["description"], icon=item["icon"],
+        required_config=tuple(f["key"] for f in item["configurationFields"] if f["required"]),
+        export_kind=item["exportKind"], documentation=item["documentation"],
+    ) for item in AGENT_DEFINITIONS
 )
 
 NODE_CATALOG_BY_TYPE: dict[str, NodeCatalogEntry] = {entry.type: entry for entry in NODE_CATALOG}

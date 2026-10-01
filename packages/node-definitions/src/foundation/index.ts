@@ -57,13 +57,13 @@ export const promptTemplateDefinition: NodeDefinition = {
   type: "foundation.prompt_template",
   displayName: "Prompt Template",
   description:
-    "Prompt Template renders a PROMPT from a template string and an optional STRING variables input. Put placeholders such as {{input}} in the template, connect upstream text when substitution is needed, and feed the PROMPT output into agents, vision models, or other prompt-aware nodes. It makes prompt structure explicit and reviewable on the canvas.",
+    "Prompt Template renders prompt text from a template string and an optional STRING variables input. Put placeholders such as {{input}} in the template, connect upstream text when substitution is needed, and feed the STRING output into agents, vision models, or other prompt-aware nodes. It makes prompt structure explicit and reviewable on the canvas.",
   category: "foundation",
   version: "1.0.0",
   icon: "message-square",
   exportKind: "prompt_template",
   inputs: [portTemplate("variables", "input", "STRING", { required: false })],
-  outputs: [portTemplate("prompt", "output", "PROMPT")],
+  outputs: [portTemplate("prompt", "output", "STRING")],
   configurationFields: [
     {
       key: "template",

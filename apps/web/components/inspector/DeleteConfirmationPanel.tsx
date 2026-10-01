@@ -19,9 +19,7 @@ export function DeleteConfirmationPanel() {
     const node = nodes.find((item) => item.id === id);
     return node?.name ?? id;
   });
-  const edgeCount = pending.edgeIds.filter((id) =>
-    edges.some((edge) => edge.id === id),
-  ).length;
+  const edgeCount = edges.filter(edge => pending.edgeIds.includes(edge.id) || pending.nodeIds.includes(edge.sourceNodeId) || pending.nodeIds.includes(edge.targetNodeId)).length;
 
   return (
     <section
@@ -56,12 +54,13 @@ export function DeleteConfirmationPanel() {
             </span>
           </>
         )}
-        . This cannot be undone from the canvas (undo is still available).
+        . You can restore this with Undo (Ctrl/Cmd+Z).
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
           className="rounded bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+          autoFocus
           onClick={confirmDelete}
         >
           Delete

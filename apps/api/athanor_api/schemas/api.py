@@ -96,6 +96,9 @@ class ExecuteProjectResponse(BaseModel):
 
 
 class ExportProjectRequest(BaseModel):
+    export_format: Literal["code", "helm", "podman", "docker", "openshift", "npm", "makefile"] = (
+        Field(default="code", alias="exportFormat")
+    )
     graph: ArchitectureGraph
     include_docker_compat: bool = Field(default=False, alias="includeDockerCompat")
     include_kubernetes: bool = Field(default=False, alias="includeKubernetes")

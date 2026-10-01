@@ -1,0 +1,314 @@
+"""Generated endpoint runtime. Executed only inside the selected sandbox by workflow.py."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import sys
+import time
+from contextlib import AsyncExitStack
+from typing import Any
+from urllib.parse import urlparse
+
+import httpx
+from jsonschema import Draft202012Validator
+from referencing import Registry
+
+MAX_RESPONSE_BYTES = 2_000_000
+
+
+def reject_remote_reference(uri):
+    raise ValueError("External schema references are disabled")
+
+
+def check_arguments(schema, arguments):
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(
+        schema, registry=Registry(retrieve=reject_remote_reference)
+    ).validate(arguments)
+
+
+def connected(graph: dict, node: dict, port: str) -> list[dict]:
+    ids = {p["id"] for p in node["inputs"] if p["name"] == port}
+    by_id = {n["id"]: n for n in graph["nodes"]}
+    return [
+        by_id[e["sourceNodeId"]]
+        for e in graph["edges"]
+        if e["targetNodeId"] == node["id"] and e["targetPortId"] in ids
+    ]
+
+
+def auth_headers(config: dict) -> dict[str, str]:
+    name = config.get("secretName", "")
+    if not name:
+        return {}
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"Missing environment variable: {name}")
+    return {"Authorization": f"Bearer {value}"}
+
+
+async def request_json(config: dict, payload: dict, method: str = "POST") -> Any:
+    url = config["endpoint"]
+    parsed = urlparse(url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+    ):
+        raise ValueError("Invalid endpoint")
+    async with httpx.AsyncClient(
+        timeout=float(config.get("timeoutSeconds", 30)),
+        follow_redirects=False,
+        trust_env=False,
+    ) as client:
+        options = {"params": payload} if method == "GET" else {"json": payload}
+        async with client.stream(
+            method, url, headers=auth_headers(config), **options
+        ) as response:
+            response.raise_for_status()
+            data = bytearray()
+            async for chunk in response.aiter_bytes():
+                data.extend(chunk)
+                if len(data) > MAX_RESPONSE_BYTES:
+                    raise ValueError("Endpoint response exceeds 2 MB")
+            return json.loads(data)
+
+
+def emit(event: dict) -> None:
+    print(json.dumps(event), flush=True)
+
+
+async def approve(name: str, arguments: dict) -> bool:
+    emit({"kind": "approval", "tool": name, "arguments": arguments})
+    raw = await asyncio.to_thread(sys.stdin.readline)
+    return bool(raw and json.loads(raw).get("approved") is True)
+
+
+async def call_api_tool(config: dict, arguments: dict, approval=approve) -> Any:
+    schema = json.loads(config["inputSchema"])
+    check_arguments(schema, arguments)
+    if config.get("requiresApproval", True) and not await approval(
+        config["toolName"], arguments
+    ):
+        raise PermissionError("Tool invocation requires approval")
+    return await request_json(config, arguments, config["method"])
+
+
+async def run_agent(graph: dict, node: dict, task: str, approval=approve) -> str:
+    config = node["configuration"]
+    model = connected(graph, node, "model")[0]["configuration"]
+    tools: dict[str, dict] = {}
+    callbacks = {}
+
+    def add_api_tool(tool: dict) -> None:
+        cfg = tool["configuration"]
+        name = cfg["toolName"]
+        if name in tools:
+            raise ValueError(f"Duplicate tool name: {name}")
+        tools[name] = {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": cfg["description"],
+                "parameters": json.loads(cfg["inputSchema"]),
+            },
+        }
+
+        async def call(arguments: dict) -> Any:
+            return await call_api_tool(cfg, arguments, approval)
+
+        callbacks[name] = call
+
+    async with AsyncExitStack() as stack:
+        for tool in connected(graph, node, "tools"):
+            add_api_tool(tool)
+        for remote in connected(graph, node, "mcp"):
+            if remote["type"] == "mcp.server":
+                # In-process use of the same connected API capabilities; server can also run independently.
+                for tool in connected(graph, remote, "tools"):
+                    add_api_tool(tool)
+                continue
+            import httpx2
+            from mcp import Client
+            from mcp.client.streamable_http import streamable_http_client
+
+            rcfg = remote["configuration"]
+            if remote["type"] == "mcp.stdio":
+                from mcp import StdioServerParameters
+                from mcp.client.stdio import stdio_client
+
+                names = [
+                    name.strip()
+                    for name in rcfg["environmentNames"].split(",")
+                    if name.strip()
+                ]
+                env = {name: os.environ[name] for name in names}
+                env["PATH"] = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
+                params = StdioServerParameters(
+                    command=rcfg["command"], args=json.loads(rcfg["args"]), env=env
+                )
+                transport = stdio_client(params)
+            else:
+                http_client = await stack.enter_async_context(
+                    httpx2.AsyncClient(
+                        headers=auth_headers(rcfg),
+                        timeout=float(rcfg.get("timeoutSeconds", 30)),
+                        follow_redirects=False,
+                        trust_env=False,
+                    )
+                )
+                transport = streamable_http_client(
+                    rcfg["endpoint"], http_client=http_client
+                )
+            session = await stack.enter_async_context(
+                Client(
+                    transport,
+                    read_timeout_seconds=float(rcfg.get("timeoutSeconds", 30)),
+                )
+            )
+            allowed = {
+                name.strip() for name in rcfg["allowedTools"].split(",") if name.strip()
+            }
+            catalog = await session.list_tools()
+            remote_tools = list(catalog.tools)
+            seen_cursors = set()
+            while catalog.next_cursor:
+                if catalog.next_cursor in seen_cursors or len(seen_cursors) >= 50:
+                    raise ValueError("MCP tool pagination exceeds limit")
+                seen_cursors.add(catalog.next_cursor)
+                catalog = await session.list_tools(cursor=catalog.next_cursor)
+                remote_tools.extend(catalog.tools)
+            advertised = {tool.name for tool in remote_tools}
+            for tool in remote_tools:
+                if tool.name not in allowed:
+                    continue
+                if tool.name in tools:
+                    raise ValueError(f"Duplicate tool name: {tool.name}")
+                schema = tool.input_schema
+                tools[tool.name] = {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "parameters": schema,
+                    },
+                }
+
+                async def invoke(
+                    arguments, name=tool.name, schema=schema, session=session, cfg=rcfg
+                ):
+                    check_arguments(schema, arguments)
+                    if cfg.get("requiresApproval", True) and not await approval(
+                        name, arguments
+                    ):
+                        raise PermissionError("MCP tool invocation requires approval")
+                    result = await session.call_tool(name, arguments)
+                    if result.is_error:
+                        raise RuntimeError("MCP tool reported an error")
+                    return result.model_dump(mode="json")
+
+                callbacks[tool.name] = invoke
+            missing = allowed - advertised
+            if missing:
+                raise ValueError(
+                    "Configured MCP tools were not advertised by the server"
+                )
+        messages = [
+            {"role": "system", "content": config["instructions"]},
+            {"role": "user", "content": task},
+        ]
+        calls = 0
+        for step in range(int(config["maxSteps"])):
+            emit(
+                {
+                    "kind": "event",
+                    "nodeId": node["id"],
+                    "event": "model_turn",
+                    "step": step + 1,
+                }
+            )
+            body = {
+                "model": model["model"],
+                "messages": messages,
+                "max_tokens": int(model["maxTokens"]),
+            }
+            if tools:
+                body["tools"] = list(tools.values())
+            response = await request_json(model, body)
+            message = response["choices"][0]["message"]
+            if not message.get("tool_calls"):
+                if not isinstance(message.get("content"), str):
+                    raise ValueError("Model returned no text result")
+                return message["content"]
+            messages.append(message)
+            for call in message["tool_calls"]:
+                calls += 1
+                if calls > int(config["maxToolCalls"]):
+                    raise RuntimeError("Maximum tool calls exceeded")
+                name = call["function"]["name"]
+                if name not in callbacks:
+                    raise PermissionError("Model requested an unconnected tool")
+                arguments = json.loads(call["function"]["arguments"])
+                result = await callbacks[name](arguments)
+                text = json.dumps(result)
+                if len(text.encode()) > MAX_RESPONSE_BYTES:
+                    raise ValueError("Tool result exceeds 2 MB")
+                messages.append(
+                    {"role": "tool", "tool_call_id": call["id"], "content": text}
+                )
+                emit(
+                    {
+                        "kind": "event",
+                        "nodeId": node["id"],
+                        "event": "tool_completed",
+                        "tool": name,
+                    }
+                )
+    raise RuntimeError("Maximum model turns exceeded")
+
+
+async def run_node(graph: dict, node: dict, task: str) -> str:
+    config = node["configuration"]
+    if node["type"].startswith("harness."):
+        result = await request_json(config, {config["inputKey"]: task})
+        output = result.get(config["outputKey"])
+        if not isinstance(output, str):
+            raise ValueError(
+                "Harness response must contain the configured string result field"
+            )
+        return output
+    return await run_agent(graph, node, task)
+
+
+async def main() -> None:
+    payload = json.loads(sys.stdin.readline())
+    started = time.monotonic()
+    try:
+        result = await asyncio.wait_for(
+            run_node(payload["graph"], payload["node"], payload["task"]),
+            timeout=payload["node"]["configuration"]["timeoutSeconds"],
+        )
+        emit(
+            {
+                "kind": "result",
+                "output": result,
+                "durationMs": round((time.monotonic() - started) * 1000),
+            }
+        )
+    except Exception as exc:
+        # Do not echo HTTP errors, URLs, credentials, or tool response bodies into logs.
+        emit(
+            {
+                "kind": "error",
+                "error": type(exc).__name__,
+                "message": "Run failed. Check endpoint contracts, permissions, runtime limits, and environment references.",
+            }
+        )
+        raise SystemExit(1) from None
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

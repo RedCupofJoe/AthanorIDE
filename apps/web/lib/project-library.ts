@@ -1,5 +1,5 @@
 /**
- * Multi-project localStorage library: index, per-project bodies, legacy migration.
+ * Multi-project localStorage library: index and per-project bodies for agent projects.
  */
 import {
   ArchitectureGraphSchema,
@@ -8,9 +8,7 @@ import {
   parseArchitectureGraph,
 } from "@athanor/contracts";
 
-/** Legacy single-project key (migrated on first library access). */
-export const LEGACY_STORAGE_KEY = "athanoride.project.v1";
-export const PROJECT_INDEX_KEY = "athanoride.projects.index.v1";
+export const PROJECT_INDEX_KEY = "athanoride.agents.projects.index.v1";
 
 export type ProjectSummary = {
   id: string;
@@ -26,7 +24,7 @@ type ProjectIndex = {
 };
 
 function bodyKey(id: string): string {
-  return `athanoride.project.${id}.v1`;
+  return `athanoride.agents.project.${id}.v1`;
 }
 
 function emptyIndex(): ProjectIndex {
@@ -86,48 +84,21 @@ function upsertSummary(index: ProjectIndex, summary: ProjectSummary): ProjectInd
   };
 }
 
-/** One-time migration from the Phase-1 single-project storage key. */
-export function migrateLegacyProjectIfNeeded(): void {
-  if (typeof window === "undefined") return;
-  const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
-  if (!legacy) return;
-
-  try {
-    const graph = parseArchitectureGraph(JSON.parse(legacy));
-    const index = readIndexRaw();
-    if (!index.entries.some((entry) => entry.id === graph.project.id)) {
-      window.localStorage.setItem(bodyKey(graph.project.id), JSON.stringify(graph));
-      const next = upsertSummary(index, summaryFromGraph(graph));
-      next.activeId = next.activeId ?? graph.project.id;
-      writeIndex(next);
-    }
-  } catch {
-    // Leave legacy key in place if it cannot be parsed.
-    return;
-  }
-
-  window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-}
-
 export function listProjectSummaries(): ProjectSummary[] {
-  migrateLegacyProjectIfNeeded();
   return readIndexRaw().entries;
 }
 
 export function getActiveProjectId(): string | null {
-  migrateLegacyProjectIfNeeded();
   return readIndexRaw().activeId;
 }
 
 export function setActiveProjectId(id: string | null): void {
-  migrateLegacyProjectIfNeeded();
   const index = readIndexRaw();
   writeIndex({ ...index, activeId: id });
 }
 
 export function loadProjectGraph(id: string): ArchitectureGraph | null {
   if (typeof window === "undefined") return null;
-  migrateLegacyProjectIfNeeded();
   try {
     const raw = window.localStorage.getItem(bodyKey(id));
     if (!raw) return null;
@@ -139,7 +110,6 @@ export function loadProjectGraph(id: string): ArchitectureGraph | null {
 
 export function saveProjectGraph(graph: ArchitectureGraph): void {
   if (typeof window === "undefined") return;
-  migrateLegacyProjectIfNeeded();
   const parsed = ArchitectureGraphSchema.parse(graph);
   window.localStorage.setItem(bodyKey(parsed.project.id), JSON.stringify(parsed));
   const index = upsertSummary(readIndexRaw(), summaryFromGraph(parsed));
@@ -170,7 +140,6 @@ export function renameProject(id: string, name: string): ArchitectureGraph | nul
 
 export function deleteProject(id: string): void {
   if (typeof window === "undefined") return;
-  migrateLegacyProjectIfNeeded();
   window.localStorage.removeItem(bodyKey(id));
   const index = readIndexRaw();
   const entries = index.entries.filter((entry) => entry.id !== id);

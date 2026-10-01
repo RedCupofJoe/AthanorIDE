@@ -28,6 +28,7 @@ export { ExportResponseSchema };
 export type ExportResponse = z.infer<typeof ExportResponseSchema>;
 
 export type ExportOptions = {
+  exportFormat?: "code" | "helm" | "podman" | "docker" | "openshift" | "npm" | "makefile";
   projectSlug?: string;
   includeDockerCompat?: boolean;
   includeKubernetes?: boolean;
@@ -50,6 +51,7 @@ export async function exportProject(
     body: JSON.stringify({
       graph,
       projectSlug: options?.projectSlug,
+      exportFormat: options?.exportFormat ?? "code",
       includeDockerCompat:
         options?.includeDockerCompat ?? exportConfiguration?.includeDockerCompat ?? false,
       includeKubernetes:

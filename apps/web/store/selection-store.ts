@@ -20,7 +20,11 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
   focusNodeId: null,
   focusEdgeId: null,
   setSelection: (nodeIds, edgeIds = []) =>
-    set({ selectedNodeIds: nodeIds, selectedEdgeIds: edgeIds, focusEdgeId: null }),
+    set(state => {
+      if (state.selectedNodeIds.length === nodeIds.length && state.selectedEdgeIds.length === edgeIds.length &&
+          state.selectedNodeIds.every((id, i) => id === nodeIds[i]) && state.selectedEdgeIds.every((id, i) => id === edgeIds[i])) return state;
+      return { selectedNodeIds: nodeIds, selectedEdgeIds: edgeIds, focusNodeId: null, focusEdgeId: null };
+    }),
   clearSelection: () =>
     set({
       selectedNodeIds: [],

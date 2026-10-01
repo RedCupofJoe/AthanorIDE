@@ -3,8 +3,8 @@
 /**
  * Left sidebar node library with two-click add, docs, and compact mode.
  */
-import { useState } from "react";
-import { listNodeDefinitions } from "@athanor/node-definitions";
+import { useEffect, useRef, useState } from "react";
+import { listNodeDefinitions, isAgentStudioType } from "@athanor/node-definitions";
 import {
   AudioLines,
   Bot,
@@ -48,6 +48,9 @@ import {
   Boxes,
 } from "lucide-react";
 
+import { McpImportPanel } from "./McpImportPanel";
+import { useBlockTemplateStore } from "@/store/block-template-store";
+import { serializeBlockTemplates } from "@/lib/block-templates";
 import { cn } from "@/lib/cn";
 import { useProjectStore } from "@/store/project-store";
 import { useSelectionStore } from "@/store/selection-store";
@@ -95,7 +98,11 @@ const ICONS = {
 } as const;
 
 const CATEGORY_LABELS: Record<string, string> = {
-  foundation: "Foundation",
+  agents: "Agents & API tools",
+  harnesses: "Harnesses · 5 alternatives",
+  sandboxes: "Sandboxes · 5 alternatives",
+  mcp: "MCP servers",
+  foundation: "Inputs & wiring",
   "fine-tuning": "Fine-tuning",
   vision: "Vision",
   "multi-agent": "Multi-agent",
@@ -104,6 +111,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function NodePalette() {
+  const [importMcp, setImportMcp] = useState(false);
+  const [query, setQuery] = useState("");
+  const templateFile = useRef<HTMLInputElement>(null);
+  const templates = useBlockTemplateStore(state => state.templates);
+  const templateError = useBlockTemplateStore(state => state.error);
+  const hydrateTemplates = useBlockTemplateStore(state => state.hydrate);
+  const importTemplates = useBlockTemplateStore(state => state.importJson);
+  const removeTemplate = useBlockTemplateStore(state => state.remove);
+  const addTemplate = useProjectStore(state => state.addTemplate);
+  useEffect(() => { hydrateTemplates(); }, [hydrateTemplates]);
   const addNode = useProjectStore((state) => state.addNode);
   const focusNode = useSelectionStore((state) => state.focusNode);
   const compact = useUiPreferencesStore((state) => state.paletteCompact);
@@ -113,7 +130,10 @@ export function NodePalette() {
   const [expandedDescriptions, setExpandedDescriptions] = useState<readonly string[]>(
     () => [],
   );
-  const definitions = listNodeDefinitions();
+  const definitions = listNodeDefinitions().filter(definition =>
+    isAgentStudioType(definition.type) &&
+    `${definition.displayName} ${definition.description}`.toLowerCase().includes(query.toLowerCase()),
+  );
 
   const grouped = definitions.reduce<Record<string, Array<(typeof definitions)[number]>>>(
     (acc, definition) => {
@@ -156,7 +176,7 @@ export function NodePalette() {
   return (
     <aside
       className={cn(
-        "flex h-full flex-col gap-3 border-r border-[var(--athanor-mist)] bg-white/80 p-4",
+        "flex h-full min-h-0 shrink-0 flex-col gap-3 border-r border-[var(--athanor-mist)] bg-white/80 p-4",
         compact ? "w-56" : "w-80",
       )}
       aria-label="Node palette"
@@ -164,7 +184,7 @@ export function NodePalette() {
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-sm font-semibold">Node library</h2>
+            <h2 className="text-sm font-semibold">Agent block library</h2>
             <p className="mt-1 text-xs text-[var(--athanor-slate)]">
               {compact
                 ? "Names only — for proficient users. Click twice to place."
@@ -204,7 +224,33 @@ export function NodePalette() {
         )}
       </div>
 
-      <div className="space-y-4 overflow-auto">
+      <button type="button" className="rounded border border-[var(--athanor-ember)] bg-orange-50 px-3 py-2 text-sm text-[var(--athanor-ember)]" onClick={() => setImportMcp(true)}>Import MCP servers</button>
+      {importMcp && <McpImportPanel onClose={() => setImportMcp(false)} />}
+      <input aria-label="Search blocks" placeholder="Search blocks…" value={query} onChange={event => setQuery(event.target.value)} className="w-full rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5 text-sm" />
+      <div className="min-h-0 flex-1 space-y-4 overflow-auto">
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--athanor-slate)]">My blocks</h3>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <button type="button" className="rounded border px-2 py-1" onClick={() => placeNode("agent.custom_tool")}>+ Custom API block</button>
+            <button type="button" className="rounded border px-2 py-1" onClick={() => templateFile.current?.click()}>Import templates</button>
+            <button type="button" disabled={!templates.length} className="rounded border px-2 py-1 disabled:opacity-40" onClick={() => {
+              const url = URL.createObjectURL(new Blob([serializeBlockTemplates(templates)], { type: "application/json" }));
+              const a = document.createElement("a"); a.href = url; a.download = "athanor-blocks.json"; a.click(); URL.revokeObjectURL(url);
+            }}>Export templates</button>
+          </div>
+          <input ref={templateFile} type="file" accept=".json,application/json" className="hidden" aria-label="Import block templates" onChange={async event => {
+            const file = event.target.files?.[0];
+            if (file) { try { importTemplates(await file.text()); } catch { useBlockTemplateStore.setState({ error: "Could not read this template file." }); } }
+            event.target.value = "";
+          }} />
+          {templateError && <p role="alert" className="text-xs text-red-700">{templateError}</p>}
+          {!templates.length && <p className="text-xs text-[var(--athanor-slate)]">Configure a block, apply changes, then save it as a template in the inspector.</p>}
+          {templates.filter(t => t.name.toLowerCase().includes(query.toLowerCase())).map(template => <div key={template.id} className="flex items-center gap-2 rounded border border-[var(--athanor-mist)] bg-white p-2 text-xs">
+            <button type="button" className="flex-1 text-left font-medium" onClick={() => focusNode(addTemplate(template))}>{template.name}</button>
+            <button type="button" aria-label={`Remove ${template.name} template`} className="text-red-700" onClick={() => removeTemplate(template.id)}>×</button>
+          </div>)}
+        </section>
+        {!definitions.length && <p className="text-xs text-[var(--athanor-slate)]">No matching blocks.</p>}
         {Object.entries(grouped).map(([category, items]) => (
           <section key={category}>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--athanor-slate)]">
@@ -264,10 +310,6 @@ export function NodePalette() {
                           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--athanor-ember)]",
                         )}
                         onClick={() => onPaletteClick(definition.type)}
-                        onDoubleClick={(event) => {
-                          event.preventDefault();
-                          placeNode(definition.type);
-                        }}
                       >
                         <Icon
                           className={cn(

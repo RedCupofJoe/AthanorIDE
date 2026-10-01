@@ -9,6 +9,7 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from athanor_api.exporter.agent_studio import render_agent_files
 from athanor_api.exporter.ir import ExportIR
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "templates" / "export"
@@ -102,7 +103,17 @@ def ir_context(ir: ExportIR) -> dict[str, Any]:
     }
 
 
-def render_export_files(ir: ExportIR) -> dict[str, str]:
+def render_export_files(ir: ExportIR, export_format: str = "code") -> dict[str, str]:
+    if (
+        any(
+            n["type"].startswith(("agent.", "harness.", "sandbox.", "mcp."))
+            for n in ir.source_graph["nodes"]
+        )
+        or export_format != "code"
+    ):
+        return dict(
+            sorted(render_agent_files(ir.source_graph, ir.project_slug, export_format).items())
+        )
     environment = _env()
     context = ir_context(ir)
     files: dict[str, str] = {}

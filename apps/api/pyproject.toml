@@ -12,10 +12,13 @@ dependencies = [
   "jinja2>=3.1.6",
   "pyyaml>=6.0.3",
   "cryptography>=44.0.0",
+  "jsonschema>=4.23.0",
 ]
 
 [project.optional-dependencies]
 dev = [
+  "mcp>=2.2,<3",
+  "httpx2>=2.13,<3",
   "httpx>=0.28.0",
   "mypy>=1.15.0",
   "pytest>=8.3.0",

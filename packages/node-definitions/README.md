@@ -2,9 +2,23 @@
 
 Declarative catalog of canvas nodes: ports, configuration fields, documentation, icons, and export behavior.
 
-**This package is the authoring source of truth.** The API mirrors summaries in `apps/api/athanor_api/catalog.py` for offline validation/export.
+**This package is the authoring source of truth.** Current agent definitions live in [src/agent-studio/index.ts](src/agent-studio/index.ts). `pnpm catalog:sync` builds the package and generates [the API's agent_catalog.json](../../apps/api/athanor_api/agent_catalog.json); `catalog.py` loads it alongside retained legacy entries.
 
-## Categories
+## Current palette
+
+| Category | Prefix | Blocks |
+| --- | --- | --- |
+| Agents | `agent.*` | Sandboxed Agent, Model Endpoint, API Tool, Custom API Block |
+| Harnesses | `harness.*` | LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, CrewAI endpoint adapters |
+| Sandboxes | `sandbox.*` | Podman, Docker, gVisor, Kata, Firecracker blueprint |
+| MCP | `mcp.*` | Server Builder, Connection, Package / Command, Resource, Prompt |
+| Foundation | Selected `foundation.*` | Text Input, JSON Input, Prompt Template, Output Viewer |
+
+`NODE_DEFINITIONS` contains both current and retained definitions. The frontend uses `isAgentStudioType` to select its main palette. `HARNESS_OPTIONS` and `SANDBOX_OPTIONS` describe five curated alternatives each; their descriptions must distinguish runnable integrations from endpoint adapters and blueprints.
+
+Read the [agent studio guide](../../docs/agent-studio.md) for current behavior and the [root README](../../README.md) for setup. Saving a configured block as a UI template reuses its existing type; it does not register a new runtime implementation.
+
+## Retained categories
 
 | Category | Prefix | Examples |
 | --- | --- | --- |
@@ -15,7 +29,7 @@ Declarative catalog of canvas nodes: ports, configuration fields, documentation,
 | Enterprise | `enterprise.*` | Policy Guardrail, Audit Log, Identity Reference, Primary DB + Vector DB |
 | Big Blocks | `big_blocks.*` | Opinionated multi-tech composites (gateway, RAG, UI, harness, …) |
 
-Human-readable reference: [docs/node-catalog.md](../../docs/node-catalog.md).
+Historical reference: [docs/node-catalog.md](../../docs/node-catalog.md). These categories are not all shown in the current palette and their runtimes cannot automatically be mixed into agent exports.
 
 ## Anatomy of a `NodeDefinition`
 
@@ -37,22 +51,27 @@ Human-readable reference: [docs/node-catalog.md](../../docs/node-catalog.md).
 
 `createNodeFromDefinition(type, position)` materializes an `ArchitectureNode` with port ids and default config.
 
-## Adding a node (checklist)
+## Adding an agent/MCP block
 
-1. Add the definition under the right category folder (`src/foundation`, `vision`, …).
-2. Export it from `src/index.ts` into `NODE_DEFINITIONS`.
-3. Mirror a `NodeCatalogEntry` in `apps/api/athanor_api/catalog.py` (required config + export kind).
-4. Add validation rules in `validation/engine.py` if needed.
-5. Teach export IR / templates if the node should emit lineage or stubs.
-6. Decide IDE **execute** behavior (`execution/engine.py`) — often `skipped` for lineage-only nodes.
-7. Map the icon in `NodePalette.tsx` / `FoundationNode.tsx`.
-8. Extend tests (catalog length assertions, validation, export).
+1. Add the definition to `src/agent-studio/index.ts`, including typed ports, defaults, inspector fields, descriptions, and `exportKind: "agent_studio"`.
+2. Ensure `src/index.ts` exports it and `isAgentStudioType` includes its type. Check the palette's category handling and icon mappings in `NodePalette.tsx` / `FoundationNode.tsx`.
+3. If adding a contract type, update the shared TypeScript/Zod contracts, canonical graph JSON Schema, and API graph schema together.
+4. Run `pnpm catalog:sync` from the repository root. Do not manually edit `agent_catalog.json`.
+5. Implement validation in `apps/api/athanor_api/validation/agent_studio.py` and shared graph validation where needed.
+6. Define design-preview behavior in `execution/engine.py`; agent previews must not call endpoints or start workers.
+7. Implement real execution in the exported sources under `templates/export/agent/`. Update `exporter/agent_studio.py` and `exporter/agent_packaging.py` when dependencies, image recipes, or deployment constraints change.
+8. Test required ports/configuration, graph validation, preview isolation, runtime behavior, and applicable export formats. Run `pnpm catalog:check` to verify the generated mirror.
+
+For a retained legacy block, its category module, manually maintained entries in `catalog.py`, and the older export IR/Jinja handlers may also need changes. The agent synchronization script only maintains the agent catalog mirror.
 
 ## Development
 
 ```bash
+# From the repository root, after make install; pnpm must be on PATH.
 pnpm --filter @athanor/node-definitions build
 pnpm --filter @athanor/node-definitions test
+pnpm catalog:sync
+pnpm catalog:check
 ```
 
 ## Related ADRs

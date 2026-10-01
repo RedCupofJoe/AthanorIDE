@@ -195,6 +195,13 @@ def _execute_node(
             "HTTP Request is skipped during IDE execution (no host network by default)",
         )
 
+    if node_type.startswith(("agent.", "harness.", "sandbox.", "mcp.")):
+        summary = json.dumps({"preview": True, "block": node.name, "type": node_type})
+        return "skipped", {port.id: summary for port in node.outputs}, (
+            "Design preview only. Export code to run endpoints in the selected sandbox. "
+            "No model, tool, or MCP request was sent."
+        )
+
     if node_type.startswith("fine_tuning."):
         return "skipped", {}, "Fine-tuning nodes are lineage-only in the IDE executor"
 

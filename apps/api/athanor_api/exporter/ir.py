@@ -450,6 +450,7 @@ def build_export_ir(
         else slugify(graph.project.name)
     )
 
+    slug = slugify(slug)[:50].rstrip("-")
     docker_compat = include_docker_compat
     if graph.export_configuration and graph.export_configuration.include_docker_compat:
         docker_compat = True

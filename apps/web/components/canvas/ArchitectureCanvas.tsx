@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -17,6 +18,9 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useNodesState,
+  useEdgesState,
+  useNodesInitialized,
   type Connection,
   type Edge,
   type Node,
@@ -56,7 +60,8 @@ function CanvasInner() {
   const graph = useProjectStore((state) => state.graph);
   const connectPorts = useProjectStore((state) => state.connectPorts);
   const updateNodePositions = useProjectStore((state) => state.updateNodePositions);
-  const updateNodePosition = useProjectStore((state) => state.updateNodePosition);
+  const reconnectPorts = useProjectStore((state) => state.reconnectPorts);
+  const reconnectingEdge = useRef<string | null>(null);
   const beginGesture = useProjectStore((state) => state.beginGesture);
   const setViewport = useProjectStore((state) => state.setViewport);
   const duplicateNodes = useProjectStore((state) => state.duplicateNodes);
@@ -80,6 +85,8 @@ function CanvasInner() {
   const edgePayloads = useExecutionStore((state) => state.edgePayloads);
 
   const { setCenter, fitView, getZoom } = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
+  const initialFit = useRef(false);
   const [lod, setLod] = useState<LodLevel>(() => lodFromZoom(graph.viewport.zoom));
 
   const healthByNode = useMemo(() => {
@@ -196,7 +203,9 @@ function CanvasInner() {
     for (const edge of graph.edges) {
       const sourceHidden = isNodeHiddenByMacro(edge.sourceNodeId, graph.macroBlocks);
       const targetHidden = isNodeHiddenByMacro(edge.targetNodeId, graph.macroBlocks);
-      if (sourceHidden && targetHidden) continue;
+      if (sourceHidden && targetHidden && graph.macroBlocks.some(macro =>
+        macro.collapsed && macro.nodeIds.includes(edge.sourceNodeId) && macro.nodeIds.includes(edge.targetNodeId)
+      )) continue;
 
       let source = edge.sourceNodeId;
       let target = edge.targetNodeId;
@@ -308,12 +317,19 @@ function CanvasInner() {
     return result;
   }, [focusEdgeId, graph.edges, graph.macroBlocks, graph.nodes, lod, selectedEdgeIds, edgePayloads]);
 
+  // Transient drag/selection state stays in React Flow. Commit graph positions once at drop.
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(nodes);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(edges);
+  useEffect(() => { setFlowNodes(nodes); }, [nodes, setFlowNodes]);
+  useEffect(() => { setFlowEdges(edges); }, [edges, setFlowEdges]);
+
   useEffect(() => {
     setLod(lodFromZoom(graph.viewport.zoom));
   }, [graph.viewport.zoom]);
 
   useEffect(() => {
     if (!focusNodeId) return;
+    const graph = useProjectStore.getState().graph;
     const node = graph.nodes.find((item) => item.id === focusNodeId);
     if (!node) return;
     const hidden = isNodeHiddenByMacro(node.id, graph.macroBlocks);
@@ -334,10 +350,11 @@ function CanvasInner() {
       zoom: Math.max(getZoom(), 0.9),
       duration: 400,
     });
-  }, [focusNodeId, getZoom, graph.macroBlocks, graph.nodes, setCenter]);
+  }, [focusNodeId, getZoom, setCenter]);
 
   useEffect(() => {
     if (!focusEdgeId) return;
+    const graph = useProjectStore.getState().graph;
     const edge = graph.edges.find((item) => item.id === focusEdgeId);
     if (!edge) return;
     const source = graph.nodes.find((node) => node.id === edge.sourceNodeId);
@@ -348,7 +365,7 @@ function CanvasInner() {
       (source.position.y + target.position.y) / 2 + 40,
       { zoom: Math.max(getZoom(), 0.85), duration: 400 },
     );
-  }, [focusEdgeId, getZoom, graph.edges, graph.nodes, setCenter]);
+  }, [focusEdgeId, getZoom, setCenter]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -399,7 +416,7 @@ function CanvasInner() {
       }
       const decision = evaluateConnection({
         nodes: useProjectStore.getState().graph.nodes,
-        edges: useProjectStore.getState().graph.edges,
+        edges: useProjectStore.getState().graph.edges.filter(edge => edge.id !== reconnectingEdge.current),
         sourceNodeId: connection.source,
         sourcePortId: connection.sourceHandle,
         targetNodeId: connection.target,
@@ -482,32 +499,14 @@ function CanvasInner() {
     beginGesture();
   }, [beginGesture]);
 
-  const onNodeDrag: OnNodeDrag = useCallback(
-    (_event, node) => {
-      const macroId = parseMacroFlowId(node.id);
-      if (macroId) {
-        updateMacroPosition(macroId, node.position);
-        return;
-      }
-      const swimlaneId = parseSwimlaneFlowId(node.id);
-      if (swimlaneId) {
-        const width = typeof node.style?.width === "number" ? node.style.width : 480;
-        const height = typeof node.style?.height === "number" ? node.style.height : 640;
-        updateSwimlaneBounds(swimlaneId, {
-          x: node.position.x,
-          y: node.position.y,
-          width,
-          height,
-        });
-        return;
-      }
-      updateNodePosition(node.id, node.position);
-    },
-    [updateMacroPosition, updateNodePosition, updateSwimlaneBounds],
-  );
-
   const onNodeDragStop: OnNodeDrag = useCallback(
     (_event, _node, nodesSnapshot) => {
+      for (const item of nodesSnapshot) {
+        const macroId = parseMacroFlowId(item.id);
+        if (macroId) updateMacroPosition(macroId, item.position);
+        const laneId = parseSwimlaneFlowId(item.id);
+        if (laneId) updateSwimlaneBounds(laneId, { x: item.position.x, y: item.position.y, width: Number(item.style?.width ?? 480), height: Number(item.style?.height ?? 640) });
+      }
       const architectureUpdates = nodesSnapshot
         .filter(
           (item) =>
@@ -522,7 +521,7 @@ function CanvasInner() {
         assignNodesToSwimlanes(architectureUpdates.map((item) => item.id));
       }
     },
-    [assignNodesToSwimlanes, updateNodePositions],
+    [assignNodesToSwimlanes, updateNodePositions, updateMacroPosition, updateSwimlaneBounds],
   );
 
   useEffect(() => {
@@ -564,17 +563,21 @@ function CanvasInner() {
       }
       if (event.key === "Escape") {
         usePendingDeleteStore.getState().cancelDelete();
+        useConnectionDraftStore.getState().clearDraft();
+        useSelectionStore.getState().clearSelection();
         return;
       }
       if (event.key === "Delete" || event.key === "Backspace") {
         const selection = useSelectionStore.getState();
-        const nodeIds = selection.selectedNodeIds.filter(
-          (id) => !id.startsWith("macro:") && !id.startsWith("swimlane:"),
-        );
+        const nodeIds = [...new Set(selection.selectedNodeIds.flatMap(id => {
+          const macroId = parseMacroFlowId(id);
+          if (macroId) return useProjectStore.getState().graph.macroBlocks.find(m => m.id === macroId)?.nodeIds ?? [];
+          return id.startsWith("swimlane:") ? [] : [id];
+        }))];
         const edgeIds = selection.selectedEdgeIds.filter(
           (id) => !id.startsWith("portal-bus-"),
         );
-        if (edgeIds.length > 0) {
+        if (edgeIds.length > 0 && nodeIds.length === 0) {
           // Edge selection always deletes connections only — never endpoint nodes.
           event.preventDefault();
           usePendingDeleteStore.getState().requestDelete([], edgeIds);
@@ -582,7 +585,7 @@ function CanvasInner() {
         }
         if (nodeIds.length) {
           event.preventDefault();
-          usePendingDeleteStore.getState().requestDelete(nodeIds, []);
+          usePendingDeleteStore.getState().requestDelete(nodeIds, edgeIds);
         }
       }
     };
@@ -591,16 +594,28 @@ function CanvasInner() {
   }, [duplicateNodes, redo, undo]);
 
   useEffect(() => {
-    if (graph.nodes.length === 0 && graph.macroBlocks.length === 0) {
-      void fitView({ padding: 0.2 });
+    if (!nodesInitialized || initialFit.current) return;
+    initialFit.current = true;
+    if (graph.viewport.x === 0 && graph.viewport.y === 0 && graph.viewport.zoom === 1) {
+      void fitView({ padding: 0.16, maxZoom: 1 });
     }
-  }, [fitView, graph.macroBlocks.length, graph.nodes.length]);
+  }, [nodesInitialized, fitView, graph.viewport]);
 
   return (
     <div className="relative h-full w-full">
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={flowNodes}
+        edges={flowEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onReconnectStart={(_event, edge) => { reconnectingEdge.current = edge.id; }}
+        onReconnect={(edge, connection) => {
+          if (connection.sourceHandle && connection.targetHandle) reconnectPorts(edge.id, { sourceNodeId: connection.source, sourcePortId: connection.sourceHandle, targetNodeId: connection.target, targetPortId: connection.targetHandle });
+        }}
+        onReconnectEnd={() => { reconnectingEdge.current = null; useConnectionDraftStore.getState().clearDraft(); }}
+        edgesReconnectable
+        reconnectRadius={18}
+        connectionRadius={24}
         nodeTypes={architectureNodeTypes}
         onConnect={onConnect}
         isValidConnection={isValidConnection}
@@ -609,13 +624,11 @@ function CanvasInner() {
         onSelectionChange={onSelectionChange}
         onEdgeClick={onEdgeClick}
         onNodeDragStart={onNodeDragStart}
-        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onMove={(_event, viewport) => setLod(lodFromZoom(viewport.zoom))}
         onMoveEnd={(_event, viewport) =>
           setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })
         }
-        fitView
         snapToGrid
         snapGrid={[16, 16]}
         multiSelectionKeyCode="Shift"
@@ -623,11 +636,10 @@ function CanvasInner() {
         edgesFocusable
         elementsSelectable
         selectionOnDrag
-        panOnScroll
+        panOnScroll={false}
         zoomOnScroll
         minZoom={0.1}
         maxZoom={2}
-        onlyRenderVisibleElements
         defaultViewport={graph.viewport}
         defaultEdgeOptions={{ interactionWidth: 28 }}
         proOptions={{ hideAttribution: true }}

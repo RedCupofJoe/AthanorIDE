@@ -4,6 +4,9 @@
 import type { ArchitectureNode, NodePort } from "@athanor/contracts";
 import { newId } from "@athanor/contracts";
 
+import { AGENT_STUDIO_NODE_DEFINITIONS } from "./agent-studio/index.js";
+export { AGENT_STUDIO_NODE_DEFINITIONS, HARNESS_OPTIONS, SANDBOX_OPTIONS } from "./agent-studio/index.js";
+
 import { BIG_BLOCKS_NODE_DEFINITIONS } from "./big-blocks/index.js";
 import { ENTERPRISE_NODE_DEFINITIONS } from "./enterprise/index.js";
 import { FINE_TUNING_NODE_DEFINITIONS } from "./fine-tuning/index.js";
@@ -83,7 +86,24 @@ export {
   webToMarkdownDefinition,
 } from "./big-blocks/index.js";
 
+const studioDefinitions = [
+  ...AGENT_STUDIO_NODE_DEFINITIONS,
+  ...FOUNDATION_NODE_DEFINITIONS.filter(node => ["foundation.text_input", "foundation.json_input", "foundation.prompt_template", "foundation.output_viewer"].includes(node.type)),
+];
+export function isAgentStudioType(type: string): boolean {
+  return studioDefinitions.some(node => node.type === type);
+}
+
 function withRecommendedAdjacent(definition: NodeDefinition): NodeDefinition {
+  if (isAgentStudioType(definition.type)) {
+    return {
+      ...definition,
+      recommendedAdjacent: {
+        feedsIn: studioDefinitions.filter(source => source.type !== definition.type && source.outputs.some(output => definition.inputs.some(input => input.contractType === output.contractType))).map(node => node.type),
+        feedsOut: studioDefinitions.filter(target => target.type !== definition.type && target.inputs.some(input => definition.outputs.some(output => input.contractType === output.contractType))).map(node => node.type),
+      },
+    };
+  }
   return {
     ...definition,
     recommendedAdjacent: getRecommendedAdjacent(definition.type),
@@ -91,6 +111,7 @@ function withRecommendedAdjacent(definition: NodeDefinition): NodeDefinition {
 }
 
 export const NODE_DEFINITIONS: readonly NodeDefinition[] = [
+  ...AGENT_STUDIO_NODE_DEFINITIONS,
   ...FOUNDATION_NODE_DEFINITIONS,
   ...FINE_TUNING_NODE_DEFINITIONS,
   ...VISION_NODE_DEFINITIONS,

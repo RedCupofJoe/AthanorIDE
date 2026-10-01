@@ -73,6 +73,7 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
         match === "origin" && "rounded bg-orange-50/80 ring-1 ring-orange-300/70",
       )}
       title={portTitle(port, direction)}
+      data-port-id={port.id}
     >
       {isInput && (
         <Handle
@@ -80,7 +81,7 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
           type="target"
           position={Position.Left}
           className={cn(
-            "!size-3 !border-2 !border-white !bg-[var(--athanor-ember)] transition-transform",
+            "!size-4 !border-2 !border-white !bg-[var(--athanor-ember)] transition-transform",
             "group-hover/port:!scale-125",
             match === "compatible" && "!bg-emerald-600 !scale-125",
             match === "incompatible" && draft && "!bg-stone-400",
@@ -110,7 +111,7 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
           type="source"
           position={Position.Right}
           className={cn(
-            "!size-3 !border-2 !border-white !bg-[var(--athanor-ink)] transition-transform",
+            "!size-4 !border-2 !border-white !bg-[var(--athanor-ink)] transition-transform",
             "group-hover/port:!scale-125",
             match === "compatible" && "!bg-emerald-600 !scale-125",
             match === "incompatible" && draft && "!bg-stone-400",

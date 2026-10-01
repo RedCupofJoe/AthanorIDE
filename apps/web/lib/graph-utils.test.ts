@@ -88,7 +88,7 @@ describe("evaluateConnection", () => {
     });
     expect(decision.ok).toBe(false);
     if (!decision.ok) {
-      expect(decision.reason).toMatch(/already has a connection/i);
+      expect(decision.reason).toMatch(/already connected/i);
     }
   });
 });

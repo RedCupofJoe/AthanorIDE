@@ -1,0 +1,54 @@
+"""Container/cluster entrypoint. The complete workflow shares the pod sandbox."""
+
+import argparse
+import asyncio
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+from workflow import run_workflow
+
+
+def run_worker(graph, node, task):
+    # Each agent gets a fresh process and a deadline. stdin closes after the payload,
+    # so human approval fails closed in unattended deployments.
+    process = subprocess.run(
+        [sys.executable, "-m", "app.agent_worker"],
+        input=json.dumps({"graph": graph, "node": node, "task": task}) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=node["configuration"]["timeoutSeconds"],
+    )
+    for line in process.stdout.splitlines():
+        event = json.loads(line)
+        if event["kind"] == "result" and process.returncode == 0:
+            return event["output"]
+        if event["kind"] == "error":
+            raise RuntimeError(event["message"])
+    raise RuntimeError("Worker failed or required interactive approval")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--task")
+    parser.add_argument(
+        "--server", help="Serve a specific MCP node instead of running the graph"
+    )
+    args = parser.parse_args()
+    graph = json.loads(Path("/workspace/agent-workflow.json").read_text())
+    if args.server:
+        from app.mcp_server import serve
+
+        node = next(
+            n
+            for n in graph["nodes"]
+            if n["id"] == args.server and n["type"] == "mcp.server"
+        )
+        asyncio.run(serve(graph, node))
+    else:
+        print(json.dumps(run_workflow(graph, args.task, runner=run_worker), indent=2))
+
+
+if __name__ == "__main__":
+    main()

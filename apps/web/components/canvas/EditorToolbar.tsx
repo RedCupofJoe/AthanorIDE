@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 import { executeProject } from "@/lib/execute";
-import { downloadExportZip, exportProject } from "@/lib/export";
+import { downloadExportZip, exportProject, type ExportOptions } from "@/lib/export";
 import { downloadGraphJson, importGraphJson } from "@/lib/persistence";
 import { importProjectIntoLibrary } from "@/lib/project-library";
 import { validateProject } from "@/lib/validate";
@@ -48,6 +48,7 @@ export function EditorToolbar({
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<NonNullable<ExportOptions["exportFormat"]>>("code");
   const [searchQuery, setSearchQuery] = useState("");
   const graph = useProjectStore((state) => state.graph);
   const setProjectName = useProjectStore((state) => state.setProjectName);
@@ -59,7 +60,6 @@ export function EditorToolbar({
     (state) => state.collapseSelectionToMacro,
   );
   const addSwimlane = useProjectStore((state) => state.addSwimlane);
-  const setExportConfiguration = useProjectStore((state) => state.setExportConfiguration);
   const canUndo = useProjectStore(selectCanUndo);
   const canRedo = useProjectStore(selectCanRedo);
   const setRunning = useValidationStore((state) => state.setRunning);
@@ -201,44 +201,7 @@ export function EditorToolbar({
         >
           <Map className="size-4" /> Add swimlane
         </button>
-        <fieldset className="flex flex-wrap items-center gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs">
-          <legend className="sr-only">Export deployment targets</legend>
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={Boolean(graph.exportConfiguration?.includeKubernetes)}
-              onChange={(event) =>
-                setExportConfiguration({ includeKubernetes: event.target.checked })
-              }
-            />
-            K8s
-          </label>
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={Boolean(graph.exportConfiguration?.includeOpenShift)}
-              onChange={(event) =>
-                setExportConfiguration({
-                  includeOpenShift: event.target.checked,
-                  includeKubernetes: event.target.checked
-                    ? true
-                    : graph.exportConfiguration?.includeKubernetes,
-                })
-              }
-            />
-            OpenShift
-          </label>
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={Boolean(graph.exportConfiguration?.includeTerraform)}
-              onChange={(event) =>
-                setExportConfiguration({ includeTerraform: event.target.checked })
-              }
-            />
-            Terraform
-          </label>
-        </fieldset>
+
         <button
           type="button"
           className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
@@ -296,6 +259,11 @@ export function EditorToolbar({
             }
           }}
         />
+        <label className="inline-flex items-center gap-2 text-xs">Export as
+          <select aria-label="Export format" value={exportFormat} onChange={event => setExportFormat(event.target.value as NonNullable<ExportOptions["exportFormat"]>)} className="rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5 text-sm">
+            <option value="code">Source code</option><option value="helm">Helm Chart</option><option value="podman">Podman container</option><option value="docker">Docker container</option><option value="openshift">OpenShift deployment</option><option value="npm">npm package</option><option value="makefile">Makefiles</option>
+          </select>
+        </label>
         <button
           type="button"
           className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm disabled:opacity-40"
@@ -303,7 +271,7 @@ export function EditorToolbar({
           onClick={async () => {
             setExporting(true);
             try {
-              const result = await exportProject(useProjectStore.getState().graph);
+              const result = await exportProject(useProjectStore.getState().graph, { exportFormat });
               downloadExportZip(result);
               setResult(true, result.validationIssues, result.durationMs);
             } catch (error) {
@@ -317,7 +285,7 @@ export function EditorToolbar({
             }
           }}
         >
-          <Package className="size-4" /> {exporting ? "Exporting…" : "Export repo"}
+          <Package className="size-4" /> {exporting ? "Exporting…" : "Export"}
         </button>
         <button
           type="button"
@@ -342,7 +310,7 @@ export function EditorToolbar({
             }
           }}
         >
-          <Play className="size-4" /> Run
+          <Play className="size-4" /> Run preview
         </button>
         <button
           type="button"

@@ -15,7 +15,7 @@ export function HomeShell() {
       <main className="flex min-w-0 flex-1 flex-col justify-center gap-8 px-8 py-16 sm:px-12 lg:px-16">
         <header className="mx-auto w-full max-w-2xl space-y-4">
           <p className="text-sm uppercase tracking-[0.2em] text-[var(--athanor-slate)]">
-            Local-first architecture workbench
+            Local-first agent engineering
           </p>
           <h1
             className="text-5xl font-semibold tracking-tight text-[var(--athanor-ink)] sm:text-6xl"
@@ -24,8 +24,9 @@ export function HomeShell() {
             AthanorIDE
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-[var(--athanor-slate)]">
-            Create and reopen projects from the sidebar. Each project is saved in this
-            browser and survives restarts — open one to continue on the canvas.
+            Design sandboxed agents, agent harnesses, and MCP servers on a visual canvas.
+            Connect API endpoints, choose your isolation, and export readable code.
+            Start with an example from the sidebar — every project stays saved in this browser.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
