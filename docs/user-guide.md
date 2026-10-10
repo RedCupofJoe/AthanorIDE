@@ -36,7 +36,7 @@ Autosave writes the open graph into the project slot after edits (debounced). Us
 1. **Validate** — configuration, required fields, port contracts, portal buses, deployment boundaries.
 2. **Run** — safe IDE execution for payload inspection. Compiled Python transforms use the Podman sandbox; secrets return `[redacted:…]`; HTTP nodes are skipped by default.
 3. **Compile transform** (inspector, Python Transformation) — NL → sandboxed Python via the mock/provider compiler.
-4. **Export repo** — ZIP with FastAPI app, tests, Containerfile, docs. Optional toggles: Kubernetes, OpenShift, Terraform, Docker-compat naming.
+4. **Export repo** — ZIP with FastAPI app, tests, multi-stage Podman `Containerfile`, and `deploy/podman/`. Optional toolbar toggles: **K8s**, **OKD** (full OpenShift/OKD kustomize under `deploy/okd/`), **Argo CD** (App of Apps under `deploy/argocd/`), **Terraform**.
 
 Graph JSON import/export is also available from the toolbar (imports join the project library).
 

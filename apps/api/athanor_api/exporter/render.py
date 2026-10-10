@@ -34,6 +34,8 @@ TEMPLATE_MAP: dict[str, str] = {
     "docs/deployment.md.j2": "docs/deployment.md",
     "scripts/run-local.sh.j2": "scripts/run-local.sh",
     "scripts/validate.sh.j2": "scripts/validate.sh",
+    "deploy/podman/README.md.j2": "deploy/podman/README.md",
+    "deploy/podman/build.sh.j2": "deploy/podman/build.sh",
 }
 
 K8S_TEMPLATES = (
@@ -43,6 +45,13 @@ K8S_TEMPLATES = (
     "deployment.yaml.j2",
     "service.yaml.j2",
     "networkpolicy.yaml.j2",
+)
+
+OKD_EXTRA_TEMPLATES = (
+    "kustomization.yaml.j2",
+    "route.yaml.j2",
+    "imagestream.yaml.j2",
+    "buildconfig.yaml.j2",
 )
 
 
@@ -86,6 +95,7 @@ def ir_context(ir: ExportIR) -> dict[str, Any]:
         "include_kubernetes": ir.include_kubernetes,
         "include_openshift": ir.include_openshift,
         "include_terraform": ir.include_terraform,
+        "include_argo_cd": ir.include_argo_cd,
         "deployment": ir.deployment,
         "source_node_trace": ir.source_node_trace,
         "default_text": ir.default_text,
@@ -103,6 +113,25 @@ def ir_context(ir: ExportIR) -> dict[str, Any]:
     }
 
 
+def _cluster_targets(ir: ExportIR) -> list[dict[str, Any]]:
+    cluster_targets = ir.deployment.get("cluster_targets") or []
+    if cluster_targets:
+        return list(cluster_targets)
+    primary = ir.deployment.get("primary_target")
+    return [primary] if primary else []
+
+
+def _openshift_targets(ir: ExportIR) -> list[dict[str, Any]]:
+    ocp_targets = [
+        target for target in (ir.deployment.get("targets") or []) if target.get("is_openshift")
+    ]
+    if ocp_targets:
+        return ocp_targets
+    if ir.include_openshift and ir.deployment.get("primary_target"):
+        return [ir.deployment["primary_target"]]
+    return []
+
+
 def render_export_files(ir: ExportIR, export_format: str = "code") -> dict[str, str]:
     if (
         any(
@@ -114,6 +143,7 @@ def render_export_files(ir: ExportIR, export_format: str = "code") -> dict[str, 
         return dict(
             sorted(render_agent_files(ir.source_graph, ir.project_slug, export_format).items())
         )
+
     environment = _env()
     context = ir_context(ir)
     files: dict[str, str] = {}
@@ -121,17 +151,11 @@ def render_export_files(ir: ExportIR, export_format: str = "code") -> dict[str, 
     for template_name, output_path in sorted(TEMPLATE_MAP.items()):
         if template_name == "app/http_clients.py.j2" and not ir.has_http_clients:
             continue
-        if template_name == "docs/deployment.md.j2" and not ir.has_deployment_manifests:
-            continue
         template = environment.get_template(template_name)
         files[output_path] = template.render(**context)
 
     if ir.include_kubernetes:
-        cluster_targets = ir.deployment.get("cluster_targets") or []
-        targets = cluster_targets or (
-            [ir.deployment["primary_target"]] if ir.deployment.get("primary_target") else []
-        )
-        for target in targets:
+        for target in _cluster_targets(ir):
             if not target:
                 continue
             target_context = {**context, "target": target}
@@ -142,19 +166,45 @@ def render_export_files(ir: ExportIR, export_format: str = "code") -> dict[str, 
                 files[f"{folder}/{output_name}"] = template.render(**target_context)
 
     if ir.include_openshift:
-        ocp_targets = [
-            target for target in (ir.deployment.get("targets") or []) if target.get("is_openshift")
-        ]
-        if not ocp_targets and ir.deployment.get("primary_target"):
-            ocp_targets = [ir.deployment["primary_target"]]
+        ocp_targets = _openshift_targets(ir)
         for target in ocp_targets:
             target_context = {**context, "target": target}
-            template = environment.get_template("deploy/openshift/route.yaml.j2")
-            files[f"deploy/openshift/{target['namespace']}-route.yaml"] = template.render(
-                **target_context
+            folder = f"deploy/okd/{target['namespace']}"
+            # Reuse Kubernetes base manifests inside the OKD kustomize tree.
+            for template_name in K8S_TEMPLATES:
+                template = environment.get_template(f"deploy/kubernetes/{template_name}")
+                output_name = template_name.removesuffix(".j2")
+                files[f"{folder}/{output_name}"] = template.render(**target_context)
+            for template_name in OKD_EXTRA_TEMPLATES:
+                template = environment.get_template(f"deploy/okd/{template_name}")
+                output_name = template_name.removesuffix(".j2")
+                files[f"{folder}/{output_name}"] = template.render(**target_context)
+        readme = environment.get_template("deploy/okd/README.md.j2")
+        files["deploy/okd/README.md"] = readme.render(**context)
+
+    if ir.include_argo_cd:
+        files["deploy/argocd/AppProject.yaml"] = environment.get_template(
+            "deploy/argocd/AppProject.yaml.j2"
+        ).render(**context)
+        files["deploy/argocd/root-app.yaml"] = environment.get_template(
+            "deploy/argocd/root-app.yaml.j2"
+        ).render(**context)
+        files["deploy/argocd/README.md"] = environment.get_template(
+            "deploy/argocd/README.md.j2"
+        ).render(**context)
+        child_template = environment.get_template("deploy/argocd/apps/child-app.yaml.j2")
+        for target in _cluster_targets(ir):
+            if not target:
+                continue
+            app_path = (
+                f"deploy/okd/{target['namespace']}"
+                if ir.include_openshift
+                else f"deploy/kubernetes/{target['namespace']}"
             )
-        readme = environment.get_template("deploy/openshift/README.md.j2")
-        files["deploy/openshift/README.md"] = readme.render(**context)
+            child_context = {**context, "target": target, "app_path": app_path}
+            files[f"deploy/argocd/apps/{target['namespace']}-app.yaml"] = child_template.render(
+                **child_context
+            )
 
     if ir.include_terraform and ir.deployment.get("primary_target"):
         tf = environment.get_template("deploy/terraform/main.tf.j2")

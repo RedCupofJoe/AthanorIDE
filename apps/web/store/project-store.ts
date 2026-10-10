@@ -382,6 +382,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         includeKubernetes: false,
         includeOpenShift: false,
         includeTerraform: false,
+        includeArgoCd: false,
       };
       const graph = touch({
         ...state.graph,

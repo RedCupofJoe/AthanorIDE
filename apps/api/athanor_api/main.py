@@ -252,6 +252,7 @@ async def export_project(body: ExportProjectRequest) -> ExportProjectResponse:
             include_kubernetes=body.include_kubernetes,
             include_openshift=body.include_openshift,
             include_terraform=body.include_terraform,
+            include_argo_cd=body.include_argo_cd,
             project_slug=body.project_slug,
         )
     except ExportError as exc:

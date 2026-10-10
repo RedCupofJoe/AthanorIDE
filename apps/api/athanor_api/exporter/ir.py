@@ -159,6 +159,7 @@ class ExportIR:
     include_kubernetes: bool
     include_openshift: bool
     include_terraform: bool
+    include_argo_cd: bool
     deployment: dict[str, Any]
     source_graph: dict[str, Any]
     source_node_trace: list[str] = field(default_factory=list)
@@ -217,7 +218,12 @@ class ExportIR:
 
     @property
     def has_deployment_manifests(self) -> bool:
-        return self.include_kubernetes or self.include_openshift or self.include_terraform
+        return (
+            self.include_kubernetes
+            or self.include_openshift
+            or self.include_terraform
+            or self.include_argo_cd
+        )
 
 
 def _topo_sort(graph: ArchitectureGraph) -> list[str]:
@@ -296,6 +302,7 @@ def build_export_ir(
     include_kubernetes: bool = False,
     include_openshift: bool = False,
     include_terraform: bool = False,
+    include_argo_cd: bool = False,
     project_slug: str | None = None,
 ) -> ExportIR:
     order = _topo_sort(graph)
@@ -461,6 +468,7 @@ def build_export_ir(
         include_kubernetes=include_kubernetes,
         include_openshift=include_openshift,
         include_terraform=include_terraform,
+        include_argo_cd=include_argo_cd,
     )
 
     source_graph = json.loads(
@@ -505,6 +513,7 @@ def build_export_ir(
         include_kubernetes=plan.include_kubernetes,
         include_openshift=plan.include_openshift,
         include_terraform=plan.include_terraform,
+        include_argo_cd=plan.include_argo_cd,
         deployment=deployment_plan_as_dict(plan),
         source_graph=source_graph,
         source_node_trace=order,

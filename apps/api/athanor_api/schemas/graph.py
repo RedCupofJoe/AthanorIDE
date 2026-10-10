@@ -202,6 +202,7 @@ class ExportConfiguration(BaseModel):
     include_kubernetes: bool = Field(default=False, alias="includeKubernetes")
     include_openshift: bool = Field(default=False, alias="includeOpenShift")
     include_terraform: bool = Field(default=False, alias="includeTerraform")
+    include_argo_cd: bool = Field(default=False, alias="includeArgoCd")
     metadata: dict[str, Any] | None = None
 
 

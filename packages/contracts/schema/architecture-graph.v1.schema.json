@@ -322,6 +322,7 @@
         "includeKubernetes": { "type": "boolean", "default": false },
         "includeOpenShift": { "type": "boolean", "default": false },
         "includeTerraform": { "type": "boolean", "default": false },
+        "includeArgoCd": { "type": "boolean", "default": false },
         "metadata": { "type": "object" }
       }
     },

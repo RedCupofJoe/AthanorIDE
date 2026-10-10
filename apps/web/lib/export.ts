@@ -34,6 +34,7 @@ export type ExportOptions = {
   includeKubernetes?: boolean;
   includeOpenShift?: boolean;
   includeTerraform?: boolean;
+  includeArgoCd?: boolean;
 };
 
 export async function exportProject(
@@ -60,6 +61,8 @@ export async function exportProject(
         options?.includeOpenShift ?? exportConfiguration?.includeOpenShift ?? false,
       includeTerraform:
         options?.includeTerraform ?? exportConfiguration?.includeTerraform ?? false,
+      includeArgoCd:
+        options?.includeArgoCd ?? exportConfiguration?.includeArgoCd ?? false,
     }),
     signal,
   });

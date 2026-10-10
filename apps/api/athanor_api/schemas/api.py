@@ -104,6 +104,7 @@ class ExportProjectRequest(BaseModel):
     include_kubernetes: bool = Field(default=False, alias="includeKubernetes")
     include_openshift: bool = Field(default=False, alias="includeOpenShift")
     include_terraform: bool = Field(default=False, alias="includeTerraform")
+    include_argo_cd: bool = Field(default=False, alias="includeArgoCd")
     project_slug: str | None = Field(default=None, alias="projectSlug")
 
     model_config = {"populate_by_name": True}

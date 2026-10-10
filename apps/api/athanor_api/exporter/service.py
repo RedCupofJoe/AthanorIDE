@@ -87,6 +87,7 @@ def export_architecture_graph(
     include_kubernetes: bool = False,
     include_openshift: bool = False,
     include_terraform: bool = False,
+    include_argo_cd: bool = False,
     project_slug: str | None = None,
     allow_invalid: bool = False,
 ) -> ExportResult:
@@ -105,6 +106,7 @@ def export_architecture_graph(
         include_kubernetes=include_kubernetes,
         include_openshift=include_openshift,
         include_terraform=include_terraform,
+        include_argo_cd=include_argo_cd,
         project_slug=project_slug,
     )
     try:

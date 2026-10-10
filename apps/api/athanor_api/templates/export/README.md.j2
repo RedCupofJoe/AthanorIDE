@@ -14,9 +14,12 @@ Generated at: `{{ generated_at }}`
 
 ## Local execution (rootless Podman)
 
+Self-contained helpers live under `deploy/podman/` (always included).
+
 ```bash
-podman build -t {{ project_slug }} -f Containerfile .
-podman run --rm -p 8080:8080 {{ project_slug }}
+./deploy/podman/build.sh
+# or: podman build -t {{ project_slug }} -f Containerfile .
+podman run --rm -p 8080:8080 {{ project_slug }}:latest
 curl -s http://127.0.0.1:8080/health
 curl -s -X POST http://127.0.0.1:8080/v1/run -H 'content-type: application/json' \
   -d '{"text":"hello"}'
@@ -27,6 +30,8 @@ Or with Compose:
 ```bash
 podman compose -f compose.yaml up --build
 ```
+
+Optional cluster/GitOps packages (when enabled at export): `deploy/kubernetes/`, `deploy/okd/`, `deploy/argocd/`. See `docs/deployment.md`.
 
 ## Python local run (without containers)
 

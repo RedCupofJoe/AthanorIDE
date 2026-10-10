@@ -233,6 +233,7 @@ export const ArchitectureGraphSchema = z.object({
       includeKubernetes: z.boolean().default(false),
       includeOpenShift: z.boolean().default(false),
       includeTerraform: z.boolean().default(false),
+      includeArgoCd: z.boolean().default(false),
       metadata: z.record(z.unknown()).optional(),
     })
     .optional(),

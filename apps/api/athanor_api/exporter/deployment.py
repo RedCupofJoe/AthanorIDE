@@ -75,6 +75,7 @@ class DeploymentPlan:
     include_kubernetes: bool
     include_openshift: bool
     include_terraform: bool
+    include_argo_cd: bool
     image_name: str
     container_port: int
     targets: list[DeployTarget]
@@ -212,12 +213,14 @@ def build_deployment_plan(
     include_kubernetes: bool = False,
     include_openshift: bool = False,
     include_terraform: bool = False,
+    include_argo_cd: bool = False,
 ) -> DeploymentPlan:
     export = graph.export_configuration
     if export:
         include_kubernetes = include_kubernetes or export.include_kubernetes
         include_openshift = include_openshift or export.include_openshift
         include_terraform = include_terraform or export.include_terraform
+        include_argo_cd = include_argo_cd or export.include_argo_cd
 
     envs_by_id = {env.id: env for env in graph.deployment_environments}
     nodes_by_target: dict[str, list[ArchitectureNode]] = {}
@@ -250,7 +253,9 @@ def build_deployment_plan(
         )
 
     # Default single target when no swimlanes exist but cluster manifests requested.
-    if not targets and (include_kubernetes or include_openshift or include_terraform):
+    if not targets and (
+        include_kubernetes or include_openshift or include_terraform or include_argo_cd
+    ):
         targets.append(
             DeployTarget(
                 env_id="default",
@@ -271,6 +276,11 @@ def build_deployment_plan(
     if any(target.is_openshift for target in targets):
         include_openshift = True
         include_kubernetes = True
+    # Argo CD App of Apps needs cluster manifests; prefer OKD when OpenShift is selected.
+    if include_argo_cd:
+        include_kubernetes = True
+        if include_openshift:
+            include_openshift = True
 
     secrets = [
         DeploySecretRef(
@@ -341,7 +351,16 @@ def build_deployment_plan(
     notes: list[str] = [
         "Generated manifests never embed secret values — inject via your secret provider.",
         "Local Podman/compose remains the default runtime; cluster manifests are optional.",
+        "A self-contained Podman bundle is always included under deploy/podman/.",
     ]
+    if include_argo_cd:
+        notes.append(
+            "Argo CD App of Apps is under deploy/argocd/ — set repoURL before applying root-app.yaml."
+        )
+    if include_openshift:
+        notes.append(
+            "OKD/OpenShift package is under deploy/okd/{namespace}/ — apply with oc apply -k."
+        )
     if unassigned and targets:
         notes.append(
             f"{len(unassigned)} node(s) have no deploymentTarget; "
@@ -352,6 +371,7 @@ def build_deployment_plan(
         include_kubernetes=include_kubernetes,
         include_openshift=include_openshift,
         include_terraform=include_terraform,
+        include_argo_cd=include_argo_cd,
         image_name=project_slug,
         container_port=8080,
         targets=targets,
@@ -379,6 +399,7 @@ def deployment_plan_as_dict(plan: DeploymentPlan) -> dict[str, Any]:
         "include_kubernetes": plan.include_kubernetes,
         "include_openshift": plan.include_openshift,
         "include_terraform": plan.include_terraform,
+        "include_argo_cd": plan.include_argo_cd,
         "image_name": plan.image_name,
         "container_port": plan.container_port,
         "targets": [

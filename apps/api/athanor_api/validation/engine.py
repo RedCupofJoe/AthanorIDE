@@ -767,6 +767,7 @@ def _validate_cross_environment_edges(graph: ArchitectureGraph) -> list[Validati
             graph.export_configuration.include_kubernetes
             or graph.export_configuration.include_openshift
             or graph.export_configuration.include_terraform
+            or graph.export_configuration.include_argo_cd
         )
     )
     for edge in graph.edges:

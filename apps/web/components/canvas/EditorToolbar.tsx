@@ -52,6 +52,7 @@ export function EditorToolbar({
   const [searchQuery, setSearchQuery] = useState("");
   const graph = useProjectStore((state) => state.graph);
   const setProjectName = useProjectStore((state) => state.setProjectName);
+  const setExportConfiguration = useProjectStore((state) => state.setExportConfiguration);
   const replaceGraph = useProjectStore((state) => state.replaceGraph);
   const undo = useProjectStore((state) => state.undo);
   const redo = useProjectStore((state) => state.redo);
@@ -201,7 +202,65 @@ export function EditorToolbar({
         >
           <Map className="size-4" /> Add swimlane
         </button>
-
+        <fieldset className="flex flex-wrap items-center gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs">
+          <legend className="sr-only">Export deployment targets</legend>
+          <span
+            className="text-[10px] text-[var(--athanor-slate)]"
+            title="Podman Containerfile and deploy/podman/ are always included"
+          >
+            Podman always
+          </span>
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={Boolean(graph.exportConfiguration?.includeKubernetes)}
+              onChange={(event) =>
+                setExportConfiguration({ includeKubernetes: event.target.checked })
+              }
+            />
+            K8s
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={Boolean(graph.exportConfiguration?.includeOpenShift)}
+              onChange={(event) =>
+                setExportConfiguration({
+                  includeOpenShift: event.target.checked,
+                  includeKubernetes: event.target.checked
+                    ? true
+                    : graph.exportConfiguration?.includeKubernetes,
+                })
+              }
+            />
+            OKD
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={Boolean(graph.exportConfiguration?.includeArgoCd)}
+              onChange={(event) =>
+                setExportConfiguration({
+                  includeArgoCd: event.target.checked,
+                  includeKubernetes: event.target.checked
+                    ? true
+                    : graph.exportConfiguration?.includeKubernetes,
+                })
+              }
+            />
+            Argo CD
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={Boolean(graph.exportConfiguration?.includeTerraform)}
+              onChange={(event) =>
+                setExportConfiguration({ includeTerraform: event.target.checked })
+              }
+            />
+            Terraform
+          </label>
+        </fieldset>
         <button
           type="button"
           className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
