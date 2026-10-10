@@ -97,9 +97,18 @@ export function EditorToolbar({
     <header className="flex flex-wrap items-center gap-3 border-b border-[var(--athanor-mist)] bg-white/90 px-4 py-3">
       <Link
         href="/"
-        className="rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-xs font-medium text-[var(--athanor-slate)] hover:border-[var(--athanor-ember)] hover:text-[var(--athanor-ember)]"
+        className="flex shrink-0 items-center gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs font-medium text-[var(--athanor-slate)] hover:border-[var(--athanor-ember)] hover:text-[var(--athanor-ember)]"
+        title="Back to projects"
       >
-        Projects
+        {/* eslint-disable-next-line @next/next/no-img-element -- compact toolbar mark */}
+        <img
+          src="/logo.jpg"
+          alt=""
+          width={28}
+          height={28}
+          className="size-7 rounded-sm object-cover"
+        />
+        <span>Projects</span>
       </Link>
       <div className="min-w-[12rem] flex-1">
         <label className="sr-only" htmlFor="project-name">

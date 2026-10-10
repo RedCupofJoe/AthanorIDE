@@ -3,6 +3,7 @@
 /**
  * Home layout: project sidebar + branded intro / health status.
  */
+import Image from "next/image";
 import Link from "next/link";
 
 import { HealthStatus } from "@/components/HealthStatus";
@@ -14,15 +15,18 @@ export function HomeShell() {
       <ProjectSidebar />
       <main className="flex min-w-0 flex-1 flex-col justify-center gap-8 px-8 py-16 sm:px-12 lg:px-16">
         <header className="mx-auto w-full max-w-2xl space-y-4">
+          <Image
+            src="/logo.jpg"
+            alt="AthanorIDE — AI first, visual, architect, build"
+            width={320}
+            height={320}
+            priority
+            className="h-auto w-48 max-w-full sm:w-64"
+          />
           <p className="text-sm uppercase tracking-[0.2em] text-[var(--athanor-slate)]">
             Local-first agent engineering
           </p>
-          <h1
-            className="text-5xl font-semibold tracking-tight text-[var(--athanor-ink)] sm:text-6xl"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            AthanorIDE
-          </h1>
+          <h1 className="sr-only">AthanorIDE</h1>
           <p className="max-w-xl text-lg leading-relaxed text-[var(--athanor-slate)]">
             Design sandboxed agents, agent harnesses, and MCP servers on a visual canvas.
             Connect API endpoints, choose your isolation, and export readable code.

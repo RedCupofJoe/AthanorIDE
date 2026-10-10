@@ -1,5 +1,11 @@
 # AthanorIDE
 
+<p align="center">
+  <img src="docs/assets/logo.jpg" alt="AthanorIDE logo" width="280" />
+</p>
+
+<p align="center"><strong>AI FIRST · VISUAL · ARCHITECT · BUILD</strong></p>
+
 A local-first graphical workbench for designing sandboxed agents, connecting agent harnesses, and building or importing Model Context Protocol (MCP) servers. Configure endpoints, arguments, credentials by environment variable name, and execution limits through forms; connect blocks on a canvas; export editable code and deployment artifacts.
 
 The application keeps the **project → palette → canvas → inspector → validate/preview → export** workflow. The current palette focuses on agents and MCP. Earlier architecture/compiler modules remain in the repository, but existing projects are not automatically migrated into the new workspace.

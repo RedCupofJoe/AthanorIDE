@@ -79,9 +79,19 @@ export function ProjectSidebar() {
       aria-label="Projects"
     >
       <div className="flex items-center justify-between gap-2 border-b border-[var(--athanor-mist)] px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold">Projects</h2>
-          <p className="text-[11px] text-[var(--athanor-slate)]">Saved locally on this device</p>
+        <div className="flex min-w-0 items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element -- sidebar brand mark */}
+          <img
+            src="/logo.jpg"
+            alt=""
+            width={36}
+            height={36}
+            className="size-9 shrink-0 rounded-sm object-cover"
+          />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Projects</h2>
+            <p className="text-[11px] text-[var(--athanor-slate)]">Saved locally on this device</p>
+          </div>
         </div>
         <button
           type="button"
