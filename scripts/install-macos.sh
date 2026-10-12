@@ -30,7 +30,9 @@ missing_formulas=()
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'Number(process.versions.node.split(".")[0])')" -lt 20 ]]; then
   missing_formulas+=(node)
 fi
-if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
+# Accept only a native-architecture Python. An x86_64 3.12 on Apple Silicon
+# satisfies a version check and then fails while linking cryptography.
+if ! bash "${ROOT_DIR}/scripts/resolve-python.sh" >/dev/null 2>&1; then
   missing_formulas+=(python@3.12)
 fi
 
@@ -63,7 +65,9 @@ for tool in bash git tar node npm python3; do
   fi
 done
 
-echo "Using Node.js $(node --version), Python $(python3 --version), and Make at $(command -v make)."
+PYTHON_BIN="$(bash "${ROOT_DIR}/scripts/resolve-python.sh")"
+export UV_PYTHON="${PYTHON_BIN}"
+echo "Using Node.js $(node --version), Python $("${PYTHON_BIN}" --version) ($("${PYTHON_BIN}" -c 'import platform; print(platform.machine())')), and Make at $(command -v make)."
 echo "Installing AthanorIDE dependencies and building shared packages..."
 # The bootstrapper uses pip --target to put uv under the repository's .tools/ directory.
 export PIP_BREAK_SYSTEM_PACKAGES=1

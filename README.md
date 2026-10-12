@@ -66,7 +66,7 @@ The IDE runs locally in your browser; this installs the development services and
 make dev
 ```
 
-The installer detects Apple Silicon (`arm64`) or Intel (`x86_64`). If Node.js 20+ or Python 3.12+ is missing, it offers to install those dependencies with Homebrew. If Make is missing, install Command Line Tools with `xcode-select --install` and run the installer again. It then runs the same `make install` used on Linux. Open [localhost:3000](http://localhost:3000); stop the services with Ctrl+C. The default development workflow does not require Podman. Use `make install-macos` as an equivalent entry point when Make is already available.
+The installer detects Apple Silicon (`arm64`) or Intel (`x86_64`). If Node.js 20+ or a native Python 3.12+ is missing, it offers to install those dependencies with Homebrew. An x86_64 Python on Apple Silicon, such as an Intel Anaconda install, is not used: current Command Line Tools cannot link those builds. If Make is missing, install Command Line Tools with `xcode-select --install` and run the installer again. It then runs the same `make install` used on Linux. Open [localhost:3000](http://localhost:3000); stop the services with Ctrl+C. The default development workflow does not require Podman. Use `make install-macos` as an equivalent entry point when Make is already available.
 
 ### Local development
 
