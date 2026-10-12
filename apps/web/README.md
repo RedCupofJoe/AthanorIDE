@@ -39,7 +39,7 @@ Next.js App Router application for the agent/MCP workbench. It retains the proje
 - Connections enforce compatible contracts and reject duplicates. Reconnecting an endpoint replaces a wire atomically; invalid drops retain it. Disconnects and confirmed node deletions are undoable, including attached wires.
 - Node dragging uses transient React Flow state, committing positions on drop. Initial fitting waits for measured nodes; restored viewports are preserved.
 - **Run preview** does not execute agent/MCP endpoints or workers. Real execution belongs to the exported runtime.
-- MCP import searches a browser-accessible registry or parses pasted/uploaded manifests and client configurations. Import only creates metadata/configuration blocks.
+- MCP import keeps CPU keyword/topic search available offline, offers optional local semantic search, and still supports direct online registry lookup and manifest imports. Import only creates metadata/configuration blocks; see the [MCP Registry Search guide](../../docs/mcp-registry-search.md) for caching and privacy behavior.
 - Export supports source code, Helm, Podman, Docker, OpenShift, npm, and Makefiles through the API.
 
 Projects use `athanoride.agents.projects.index.v1` and `athanoride.agents.project.<id>.v1` in localStorage. Templates use `athanor.block-templates.v1`. Back up graphs with **Graph JSON** and libraries with **Export templates**. Old project namespaces are not migrated. Storage is scoped to the browser profile and origin.

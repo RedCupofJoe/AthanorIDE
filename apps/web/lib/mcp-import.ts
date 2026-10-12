@@ -1,13 +1,37 @@
 import { createNodeFromDefinition } from "@athanor/node-definitions";
-import { newId } from "@athanor/contracts";
 import type { BlockTemplate } from "./block-templates";
 
 export const OFFICIAL_MCP_REGISTRY = "https://registry.modelcontextprotocol.io";
-export type McpCandidate = { id: string; name: string; description: string; transport: string; template: BlockTemplate; notes: string[] };
+export type McpCandidate = { id: string; name: string; description: string; transport: string; template: BlockTemplate; notes: string[]; topics: string[] };
 const record = (v: unknown): Record<string, unknown> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
 const str = (v: unknown) => typeof v === "string" ? v : "";
 const array = (v: unknown): unknown[] => Array.isArray(v) ? v : [];
 const envName = (v: string) => v.replace(/[^A-Za-z0-9_]/g, "_").toUpperCase().replace(/^[0-9]/, "_$&");
+
+function stableCandidateId(name: string, transport: string, config: Record<string, unknown>): string {
+  const configuration = Object.keys(config).sort().map((key) => `${key}:${JSON.stringify(config[key])}`).join("|");
+  const identity = `${name.trim().toLowerCase()}|${transport}|${configuration}`;
+  let hash = 2166136261;
+  for (let i = 0; i < identity.length; i += 1) hash = Math.imul(hash ^ identity.charCodeAt(i), 16777619);
+  return `mcp-${(hash >>> 0).toString(16)}`;
+}
+
+function inferTopics(name: string, description: string, transport: string, config: Record<string, unknown>): string[] {
+  const text = `${name} ${description} ${transport} ${str(config.packageSpec)} ${str(config.endpoint)}`.toLowerCase();
+  const topics = new Set<string>([transport === "stdio" ? "local process" : "remote server", transport]);
+  const groups: Array<[RegExp, string[]]> = [
+    [/github|gitlab|git repository|source control/, ["developer tools", "source control"]],
+    [/search|browser|web|crawl|scrape|fetch|markdown/, ["web", "search"]],
+    [/database|postgres|sqlite|mysql|sql|redis|mongo/, ["database", "data"]],
+    [/file|filesystem|directory|storage|s3|bucket/, ["files", "storage"]],
+    [/slack|discord|teams|email|calendar|notion/, ["productivity", "communication"]],
+    [/model|inference|embedding|llm|prompt|ai/, ["ai", "models"]],
+    [/cloud|aws|azure|gcp|kubernetes|docker|podman/, ["cloud", "infrastructure"]],
+    [/monitor|metric|log|trace|observability/, ["observability"]],
+  ];
+  for (const [pattern, values] of groups) if (pattern.test(text)) values.forEach((value) => topics.add(value));
+  return [...topics].sort();
+}
 
 function cleanEndpoint(raw: string, notes: string[]): string {
   try {
@@ -32,8 +56,8 @@ export function parseMcpImport(raw: string, source = "Imported manifest"): McpCa
     const node = createNodeFromDefinition(transport === "stdio" ? "mcp.stdio" : "mcp.client", { x: 0, y: 0 });
     node.name = name.slice(0, 120); node.configuration = { ...node.configuration, ...config };
     node.metadata = { importedFrom: source, serverVersion: version };
-    const id = newId();
-    results.push({ id, name: node.name, description, transport, notes, template: { id, name: node.name, node } });
+    const id = stableCandidateId(node.name, transport, config);
+    results.push({ id, name: node.name, description, transport, notes, topics: inferTopics(node.name, description, transport, config), template: { id, name: node.name, node } });
   }
   if (data.mcpServers) {
     for (const [name, value] of Object.entries(record(data.mcpServers))) {
