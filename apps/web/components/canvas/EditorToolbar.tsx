@@ -39,11 +39,15 @@ import { useValidationStore } from "@/store/validation-store";
 type EditorToolbarProps = {
   onOpenInfrastructureTokens?: () => void;
   onOpenLocalVault?: () => void;
+  onToggleNodeLibrary?: () => void;
+  onToggleInspector?: () => void;
 };
 
 export function EditorToolbar({
   onOpenInfrastructureTokens,
   onOpenLocalVault,
+  onToggleNodeLibrary,
+  onToggleInspector,
 }: EditorToolbarProps) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -95,6 +99,8 @@ export function EditorToolbar({
 
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-[var(--athanor-mist)] bg-white/90 px-4 py-3">
+      <button type="button" className="rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs lg:hidden" onClick={onToggleNodeLibrary}>Node library</button>
+      <button type="button" className="rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs lg:hidden" onClick={onToggleInspector}>Inspector</button>
       <Link
         href="/"
         className="flex shrink-0 items-center gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs font-medium text-[var(--athanor-slate)] hover:border-[var(--athanor-ember)] hover:text-[var(--athanor-ember)]"

@@ -10,7 +10,13 @@ export const datasetLoaderDefinition: NodeDefinition = {
   version: "1.0.0",
   icon: "database",
   exportKind: "fine_tuning",
-  inputs: [],
+  inputs: [
+    portTemplate("sourceUri", "input", "STRING", { required: false }),
+    portTemplate("sourceText", "input", "STRING", { required: false, multiple: true }),
+    portTemplate("sourceSchema", "input", "JSON_SCHEMA", { required: false }),
+    portTemplate("sourceDataset", "input", "DATASET", { required: false }),
+    portTemplate("sourceFile", "input", "FILE_REFERENCE", { required: false }),
+  ],
   outputs: [portTemplate("dataset", "output", "DATASET")],
   configurationFields: [
     {

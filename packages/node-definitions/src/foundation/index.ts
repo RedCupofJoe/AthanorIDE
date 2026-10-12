@@ -63,7 +63,10 @@ export const promptTemplateDefinition: NodeDefinition = {
   icon: "message-square",
   exportKind: "prompt_template",
   inputs: [portTemplate("variables", "input", "STRING", { required: false })],
-  outputs: [portTemplate("prompt", "output", "STRING")],
+  outputs: [
+    portTemplate("text", "output", "STRING"),
+    portTemplate("prompt", "output", "PROMPT"),
+  ],
   configurationFields: [
     {
       key: "template",
@@ -115,7 +118,10 @@ export const httpRequestDefinition: NodeDefinition = {
   version: "1.0.0",
   icon: "globe",
   exportKind: "http_client",
-  inputs: [portTemplate("body", "input", "STRING", { required: false })],
+  inputs: [
+    portTemplate("body", "input", "STRING", { required: false }),
+    portTemplate("authContext", "input", "STRING", { required: false }),
+  ],
   outputs: [portTemplate("response", "output", "STRING")],
   configurationFields: [
     {

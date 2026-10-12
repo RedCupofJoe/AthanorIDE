@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { areContractsCompatible } from "@athanor/contracts";
 
 import {
   createNodeFromDefinition,
@@ -117,12 +118,31 @@ describe("node definitions catalog", () => {
     for (const definition of listNodeDefinitions()) {
       expect(definition.recommendedAdjacent).toBeDefined();
       const adjacent = definition.recommendedAdjacent!;
-      for (const type of [...adjacent.feedsIn, ...adjacent.feedsOut]) {
-        expect(getNodeDefinition(type)?.displayName).toBeTruthy();
+      for (const type of adjacent.feedsIn) {
+        const source = getNodeDefinition(type);
+        expect(source?.displayName).toBeTruthy();
+        expect(source?.outputs.some(output => definition.inputs.some(input => areContractsCompatible(output.contractType, input.contractType)))).toBe(true);
+      }
+      for (const type of adjacent.feedsOut) {
+        const target = getNodeDefinition(type);
+        expect(target?.displayName).toBeTruthy();
+        expect(definition.outputs.some(output => target?.inputs.some(input => areContractsCompatible(output.contractType, input.contractType)))).toBe(true);
       }
     }
     const text = getNodeDefinition("foundation.text_input");
     expect(text?.recommendedAdjacent?.feedsOut).toContain("foundation.prompt_template");
     expect(text?.recommendedAdjacent?.feedsIn).toEqual([]);
+  });
+
+  it("defines unique port identifiers with explicit directions and contract types", () => {
+    for (const definition of listNodeDefinitions()) {
+      const node = createNodeFromDefinition(definition.type, { x: 0, y: 0 });
+      const inputIds = node.inputs.map(port => port.id);
+      const outputIds = node.outputs.map(port => port.id);
+      expect(new Set(inputIds).size, `${definition.type} input ids`).toBe(inputIds.length);
+      expect(new Set(outputIds).size, `${definition.type} output ids`).toBe(outputIds.length);
+      expect(node.inputs.every(port => port.direction === "input" && port.contractType)).toBe(true);
+      expect(node.outputs.every(port => port.direction === "output" && port.contractType)).toBe(true);
+    }
   });
 });

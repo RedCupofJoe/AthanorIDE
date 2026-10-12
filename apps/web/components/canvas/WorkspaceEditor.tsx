@@ -32,6 +32,18 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
   const [missing, setMissing] = useState(false);
   const [rightPanel, setRightPanel] = useState<RightPanel>("inspector");
 
+  const [mobilePanel, setMobilePanel] = useState<"palette" | "inspector" | null>(null);
+
+  useEffect(() => {
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, []);
   useEffect(() => {
     useProjectStore.setState({ hydrated: false });
     const ok = hydrate(projectId);
@@ -70,13 +82,21 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden flex-col bg-[var(--athanor-paper)]">
+    <div className="fixed inset-0 flex overflow-hidden flex-col bg-[var(--athanor-paper)]">
+      <div className="shrink-0">
       <EditorToolbar
         onOpenInfrastructureTokens={() => setRightPanel("infra")}
         onOpenLocalVault={() => setRightPanel("vault")}
+        onToggleNodeLibrary={() => setMobilePanel(current => current === "palette" ? null : "palette")}
+        onToggleInspector={() => setMobilePanel(current => current === "inspector" ? null : "inspector")}
       />
-      <div className="flex min-h-0 flex-1">
-        <NodePalette />
+      </div>
+      <div className="relative flex min-h-0 flex-1">
+        <div className={mobilePanel === "palette"
+          ? "absolute inset-y-0 left-0 z-30 shadow-xl lg:static lg:z-auto lg:shadow-none"
+          : "hidden lg:block"}>
+          <NodePalette />
+        </div>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1">
             <ArchitectureCanvas />
@@ -84,7 +104,9 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
           <ExecutionPanel />
           <ValidationPanel />
         </div>
-        <div className="flex w-80 shrink-0 flex-col border-l border-[var(--athanor-mist)]">
+        <div className={mobilePanel === "inspector"
+          ? "absolute inset-y-0 right-0 z-30 flex w-80 max-w-[calc(100vw-1rem)] flex-col overflow-y-auto overscroll-contain bg-white shadow-xl lg:static lg:z-auto lg:max-w-none lg:shadow-none"
+          : "hidden lg:flex lg:min-h-0 lg:w-80 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:overscroll-contain lg:border-l lg:border-[var(--athanor-mist)]"}>
           {rightPanel === "infra" ? (
             <InfrastructureTokensPanel open onClose={() => setRightPanel("inspector")} />
           ) : rightPanel === "vault" ? (

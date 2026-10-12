@@ -13,10 +13,14 @@ export const agentDefinition: NodeDefinition = {
   inputs: [
     portTemplate("prompt", "input", "PROMPT", { required: false }),
     portTemplate("tools", "input", "TOOL_DEFINITION", { required: false, multiple: true }),
+    portTemplate("mcp", "input", "MCP_SERVER", { required: false, multiple: true }),
+    portTemplate("context", "input", "STRING", { required: false, multiple: true }),
+    portTemplate("guardrails", "input", "STRING", { required: false, multiple: true }),
   ],
   outputs: [
     portTemplate("handle", "output", "MODEL_HANDLE"),
     portTemplate("event", "output", "EVENT"),
+    portTemplate("result", "output", "STRING", { required: false }),
   ],
   configurationFields: [
     {
@@ -65,7 +69,7 @@ export const toolDefinitionDefinition: NodeDefinition = {
   version: "1.0.0",
   icon: "wrench",
   exportKind: "multi_agent",
-  inputs: [],
+  inputs: [portTemplate("schemaSource", "input", "STRING", { required: false })],
   outputs: [portTemplate("tool", "output", "TOOL_DEFINITION")],
   configurationFields: [
     {

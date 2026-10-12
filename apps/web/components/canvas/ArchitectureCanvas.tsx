@@ -15,7 +15,9 @@ import {
   Background,
   Controls,
   MiniMap,
+  PanOnScrollMode,
   ReactFlow,
+  type FinalConnectionState,
   ReactFlowProvider,
   useReactFlow,
   useNodesState,
@@ -56,6 +58,26 @@ import { useSelectionStore } from "@/store/selection-store";
 import { useValidationStore } from "@/store/validation-store";
 import { selectPayloadPreview, useExecutionStore } from "@/store/execution-store";
 
+function rejectedConnectionReason(
+  state: FinalConnectionState,
+  excludedEdgeId?: string,
+): string | null {
+  if (state.toPosition === null) return null;
+  if (!state.toHandle || !state.toNode || !state.fromHandle || !state.fromNode) {
+    return "That connection was not accepted. Connect an output to a compatible input; the port labels show the supported data types.";
+  }
+  const fromIsSource = state.fromHandle.type === "source";
+  const decision = evaluateConnection({
+    nodes: useProjectStore.getState().graph.nodes,
+    edges: useProjectStore.getState().graph.edges.filter(edge => edge.id !== excludedEdgeId),
+    sourceNodeId: fromIsSource ? state.fromNode.id : state.toNode.id,
+    sourcePortId: fromIsSource ? state.fromHandle.id ?? "" : state.toHandle.id ?? "",
+    targetNodeId: fromIsSource ? state.toNode.id : state.fromNode.id,
+    targetPortId: fromIsSource ? state.toHandle.id ?? "" : state.fromHandle.id ?? "",
+  });
+  return decision.ok ? null : decision.reason;
+}
+
 function CanvasInner() {
   const graph = useProjectStore((state) => state.graph);
   const connectPorts = useProjectStore((state) => state.connectPorts);
@@ -69,6 +91,7 @@ function CanvasInner() {
   const redo = useProjectStore((state) => state.redo);
   const connectionError = useProjectStore((state) => state.connectionError);
   const clearConnectionError = useProjectStore((state) => state.clearConnectionError);
+  const setConnectionError = useProjectStore((state) => state.setConnectionError);
   const expandMacro = useProjectStore((state) => state.expandMacro);
   const updateMacroPosition = useProjectStore((state) => state.updateMacroPosition);
   const updateSwimlaneBounds = useProjectStore((state) => state.updateSwimlaneBounds);
@@ -461,9 +484,11 @@ function CanvasInner() {
     [],
   );
 
-  const onConnectEnd = useCallback(() => {
+  const onConnectEnd = useCallback((_event: MouseEvent | TouchEvent, state: FinalConnectionState) => {
+    const reason = rejectedConnectionReason(state, reconnectingEdge.current ?? undefined);
+    if (reason) setConnectionError(reason);
     useConnectionDraftStore.getState().clearDraft();
-  }, []);
+  }, [setConnectionError]);
 
   const onSelectionChange = useCallback(
     ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
@@ -612,7 +637,12 @@ function CanvasInner() {
         onReconnect={(edge, connection) => {
           if (connection.sourceHandle && connection.targetHandle) reconnectPorts(edge.id, { sourceNodeId: connection.source, sourcePortId: connection.sourceHandle, targetNodeId: connection.target, targetPortId: connection.targetHandle });
         }}
-        onReconnectEnd={() => { reconnectingEdge.current = null; useConnectionDraftStore.getState().clearDraft(); }}
+        onReconnectEnd={(_event, edge, _handleType, state) => {
+          const reason = rejectedConnectionReason(state, edge.id);
+          if (reason) setConnectionError(reason);
+          reconnectingEdge.current = null;
+          useConnectionDraftStore.getState().clearDraft();
+        }}
         edgesReconnectable
         reconnectRadius={18}
         connectionRadius={24}
@@ -636,8 +666,11 @@ function CanvasInner() {
         edgesFocusable
         elementsSelectable
         selectionOnDrag
-        panOnScroll={false}
-        zoomOnScroll
+        panOnScroll
+        panOnScrollMode={PanOnScrollMode.Free}
+        zoomOnScroll={false}
+        panOnDrag={[1]}
+        panActivationKeyCode="Space"
         minZoom={0.1}
         maxZoom={2}
         defaultViewport={graph.viewport}
@@ -652,6 +685,9 @@ function CanvasInner() {
 
       <div className="pointer-events-none absolute left-3 top-3 rounded border border-[var(--athanor-mist)] bg-white/90 px-2 py-1 text-[11px] text-[var(--athanor-slate)] shadow-sm">
         {lodLabel(lod)} · zoom {(graph.viewport.zoom * 100).toFixed(0)}%
+      </div>
+      <div className="pointer-events-none absolute right-3 top-3 rounded border border-[var(--athanor-mist)] bg-white/90 px-2 py-1 text-[11px] text-[var(--athanor-slate)] shadow-sm">
+        Scroll to pan · Space + drag or middle mouse to pan · Controls to zoom
       </div>
 
       {connectionError && (

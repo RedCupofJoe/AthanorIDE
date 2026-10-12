@@ -10,8 +10,14 @@ export const policyGuardrailDefinition: NodeDefinition = {
   version: "1.0.0",
   icon: "shield",
   exportKind: "enterprise",
-  inputs: [portTemplate("text", "input", "STRING")],
-  outputs: [portTemplate("text", "output", "STRING")],
+  inputs: [
+    portTemplate("text", "input", "STRING"),
+    portTemplate("identityContext", "input", "STRING", { required: false }),
+  ],
+  outputs: [
+    portTemplate("text", "output", "STRING"),
+    portTemplate("event", "output", "EVENT", { required: false }),
+  ],
   configurationFields: [
     {
       key: "policyName",
@@ -94,7 +100,7 @@ export const identityReferenceDefinition: NodeDefinition = {
   version: "1.0.0",
   icon: "fingerprint",
   exportKind: "enterprise",
-  inputs: [],
+  inputs: [portTemplate("secret", "input", "STRING", { required: false })],
   outputs: [portTemplate("identity", "output", "STRING")],
   configurationFields: [
     {

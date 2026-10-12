@@ -1,7 +1,7 @@
 /**
  * Aggregated node catalog registry and createNodeFromDefinition factory.
  */
-import type { ArchitectureNode, NodePort } from "@athanor/contracts";
+import { areContractsCompatible, type ArchitectureNode, type NodePort } from "@athanor/contracts";
 import { newId } from "@athanor/contracts";
 
 import { AGENT_STUDIO_NODE_DEFINITIONS } from "./agent-studio/index.js";
@@ -94,23 +94,35 @@ export function isAgentStudioType(type: string): boolean {
   return studioDefinitions.some(node => node.type === type);
 }
 
-function withRecommendedAdjacent(definition: NodeDefinition): NodeDefinition {
+function withRecommendedAdjacent(definition: NodeDefinition, catalog: readonly NodeDefinition[]): NodeDefinition {
+  const compatible = (left: NodeDefinition, right: NodeDefinition) =>
+    left.outputs.some(output => right.inputs.some(input => areContractsCompatible(output.contractType, input.contractType)));
   if (isAgentStudioType(definition.type)) {
     return {
       ...definition,
       recommendedAdjacent: {
-        feedsIn: studioDefinitions.filter(source => source.type !== definition.type && source.outputs.some(output => definition.inputs.some(input => input.contractType === output.contractType))).map(node => node.type),
-        feedsOut: studioDefinitions.filter(target => target.type !== definition.type && target.inputs.some(input => definition.outputs.some(output => input.contractType === output.contractType))).map(node => node.type),
+        feedsIn: studioDefinitions.filter(source => source.type !== definition.type && compatible(source, definition)).map(node => node.type),
+        feedsOut: studioDefinitions.filter(target => target.type !== definition.type && compatible(definition, target)).map(node => node.type),
       },
     };
   }
+  const adjacent = getRecommendedAdjacent(definition.type);
   return {
     ...definition,
-    recommendedAdjacent: getRecommendedAdjacent(definition.type),
+    recommendedAdjacent: {
+      feedsIn: adjacent.feedsIn.filter(type => {
+        const source = catalog.find(candidate => candidate.type === type);
+        return source !== undefined && compatible(source, definition);
+      }),
+      feedsOut: adjacent.feedsOut.filter(type => {
+        const target = catalog.find(candidate => candidate.type === type);
+        return target !== undefined && compatible(definition, target);
+      }),
+    },
   };
 }
 
-export const NODE_DEFINITIONS: readonly NodeDefinition[] = [
+const nodeDefinitionCatalog: readonly NodeDefinition[] = [
   ...AGENT_STUDIO_NODE_DEFINITIONS,
   ...FOUNDATION_NODE_DEFINITIONS,
   ...FINE_TUNING_NODE_DEFINITIONS,
@@ -118,7 +130,10 @@ export const NODE_DEFINITIONS: readonly NodeDefinition[] = [
   ...MULTI_AGENT_NODE_DEFINITIONS,
   ...ENTERPRISE_NODE_DEFINITIONS,
   ...BIG_BLOCKS_NODE_DEFINITIONS,
-].map(withRecommendedAdjacent);
+];
+export const NODE_DEFINITIONS: readonly NodeDefinition[] = nodeDefinitionCatalog.map(
+  definition => withRecommendedAdjacent(definition, nodeDefinitionCatalog),
+);
 const BY_TYPE = new Map(NODE_DEFINITIONS.map((definition) => [definition.type, definition]));
 
 export function listNodeDefinitions(): readonly NodeDefinition[] {

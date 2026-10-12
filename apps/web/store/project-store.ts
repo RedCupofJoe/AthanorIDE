@@ -84,6 +84,7 @@ interface ProjectStore {
     targetPortId: string;
   }) => boolean;
   setViewport: (viewport: ArchitectureGraph["viewport"]) => void;
+  setConnectionError: (message: string | null) => void;
   clearConnectionError: () => void;
   undo: () => void;
   redo: () => void;
@@ -523,6 +524,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
 
   clearConnectionError: () => set({ connectionError: null }),
+  setConnectionError: (message) => set({ connectionError: message }),
 
   undo: () => {
     set((state) => {

@@ -34,6 +34,8 @@ export const aiGatewayDefinition = block({
   inputs: [
     portTemplate("request", "input", "PROMPT", { required: false }),
     portTemplate("tools", "input", "TOOL_DEFINITION", { required: false, multiple: true }),
+    portTemplate("runtime", "input", "MODEL_HANDLE", { required: false }),
+    portTemplate("credentials", "input", "STRING", { required: false }),
   ],
   outputs: [
     portTemplate("response", "output", "STRING"),
@@ -69,6 +71,8 @@ export const graphRagDefinition = block({
   icon: "git-fork",
   inputs: [
     portTemplate("documents", "input", "STRING", { required: false }),
+    portTemplate("corpus", "input", "DATASET", { required: false }),
+    portTemplate("vectorStore", "input", "STRING", { required: false }),
     portTemplate("query", "input", "STRING"),
   ],
   outputs: [
@@ -105,6 +109,9 @@ export const autoRagDefinition = block({
   icon: "wand-sparkles",
   inputs: [
     portTemplate("corpus", "input", "DATASET", { required: false }),
+    portTemplate("documents", "input", "STRING", { required: false, multiple: true }),
+    portTemplate("sourceFile", "input", "FILE_REFERENCE", { required: false }),
+    portTemplate("vectorStore", "input", "STRING", { required: false }),
     portTemplate("query", "input", "STRING"),
   ],
   outputs: [portTemplate("answer", "output", "STRING")],
@@ -135,7 +142,12 @@ export const localS3BucketDefinition = block({
   description:
     "Auto Local S3 Bucket connects to or provisions an S3-compatible store such as MinIO, Garage, or SeaweedFS. Optionally pass a STRING objectKey; take bucketUri as a FILE_REFERENCE for artifact pipelines and an optional object FILE_REFERENCE when resolving a specific key.",
   icon: "hard-drive",
-  inputs: [portTemplate("objectKey", "input", "STRING", { required: false })],
+  inputs: [
+    portTemplate("objectKey", "input", "STRING", { required: false }),
+    portTemplate("weights", "input", "MODEL_WEIGHTS", { required: false }),
+    portTemplate("dataset", "input", "DATASET", { required: false }),
+    portTemplate("manifest", "input", "JSON_SCHEMA", { required: false }),
+  ],
   outputs: [
     portTemplate("bucketUri", "output", "FILE_REFERENCE"),
     portTemplate("object", "output", "FILE_REFERENCE", { required: false }),
@@ -181,6 +193,8 @@ export const simpleUiChatbotDefinition = block({
   inputs: [
     portTemplate("model", "input", "MODEL_HANDLE", { required: false }),
     portTemplate("system", "input", "PROMPT", { required: false }),
+    portTemplate("context", "input", "STRING", { required: false, multiple: true }),
+    portTemplate("identity", "input", "STRING", { required: false }),
   ],
   outputs: [
     portTemplate("messages", "output", "EVENT"),
@@ -263,7 +277,12 @@ export const modelRuntimeDefinition = block({
   description:
     "Model Runtime stands up common local OSS inference (Ollama, vLLM, llama.cpp) with optional provider URI bindings. Feed an optional PROMPT; emit handle as MODEL_HANDLE for gateways and UIs, plus an optional completion STRING when you want a direct text reply on the canvas.",
   icon: "cpu",
-  inputs: [portTemplate("prompt", "input", "PROMPT", { required: false })],
+  inputs: [
+    portTemplate("prompt", "input", "PROMPT", { required: false }),
+    portTemplate("endpoint", "input", "STRING", { required: false }),
+    portTemplate("credentials", "input", "STRING", { required: false }),
+    portTemplate("weights", "input", "MODEL_WEIGHTS", { required: false }),
+  ],
   outputs: [
     portTemplate("handle", "output", "MODEL_HANDLE"),
     portTemplate("completion", "output", "STRING", { required: false }),
@@ -412,6 +431,8 @@ export const agenticHarnessDefinition = block({
     portTemplate("goal", "input", "PROMPT"),
     portTemplate("tools", "input", "TOOL_DEFINITION", { required: false, multiple: true }),
     portTemplate("mcp", "input", "MCP_SERVER", { required: false, multiple: true }),
+    portTemplate("model", "input", "MODEL_HANDLE", { required: false }),
+    portTemplate("guardrails", "input", "STRING", { required: false, multiple: true }),
   ],
   outputs: [
     portTemplate("run", "output", "EVENT"),
@@ -466,6 +487,7 @@ export const videoToRagDefinition = block({
   inputs: [
     portTemplate("video", "input", "VIDEO"),
     portTemplate("query", "input", "STRING", { required: false }),
+    portTemplate("vectorStore", "input", "STRING", { required: false }),
   ],
   outputs: [
     portTemplate("index", "output", "DATASET"),
@@ -502,7 +524,9 @@ export const audioToRagDefinition = block({
   icon: "headphones",
   inputs: [
     portTemplate("audio", "input", "AUDIO"),
+    portTemplate("transcript", "input", "STRING", { required: false, multiple: true }),
     portTemplate("query", "input", "STRING", { required: false }),
+    portTemplate("vectorStore", "input", "STRING", { required: false }),
   ],
   outputs: [
     portTemplate("index", "output", "DATASET"),
@@ -538,6 +562,7 @@ export const multimodalRagDefinition = block({
   inputs: [
     portTemplate("query", "input", "STRING"),
     portTemplate("text", "input", "STRING", { required: false }),
+    portTemplate("vectorStore", "input", "STRING", { required: false }),
     portTemplate("image", "input", "IMAGE", { required: false }),
     portTemplate("audio", "input", "AUDIO", { required: false }),
     portTemplate("video", "input", "VIDEO", { required: false }),
@@ -675,6 +700,7 @@ export const postgresPgvectorDefinition = block({
   icon: "cylinder",
   inputs: [
     portTemplate("documents", "input", "STRING", { required: false, multiple: true }),
+    portTemplate("corpus", "input", "DATASET", { required: false }),
     portTemplate("query", "input", "STRING", { required: false }),
   ],
   outputs: [
@@ -732,6 +758,7 @@ export const guardrailBuilderDefinition = block({
     portTemplate("policySource", "input", "STRING", { required: false }),
     portTemplate("documents", "input", "STRING", { required: false, multiple: true }),
     portTemplate("model", "input", "MODEL_HANDLE", { required: false }),
+    portTemplate("credentials", "input", "STRING", { required: false }),
   ],
   outputs: [
     portTemplate("guardrailPolicy", "output", "STRING"),
