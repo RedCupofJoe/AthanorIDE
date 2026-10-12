@@ -57,4 +57,5 @@ def test_node_definitions_lists_foundation(client: TestClient) -> None:
     assert "foundation.json_input" in types
     assert "foundation.secret_reference" in types
     assert "fine_tuning.dataset_loader" in types
-    assert len(types) == 59
+    assert "model.predictive" in types
+    assert len(types) == 60

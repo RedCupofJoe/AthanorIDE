@@ -28,6 +28,20 @@ def render_agent_files(
         "workflow.py": (RUNTIME_ROOT / "workflow.py.txt").read_text(),
         "app/agent_worker.py": (RUNTIME_ROOT / "worker.py.txt").read_text(),
         "app/mcp_server.py": (RUNTIME_ROOT / "mcp_server.py.txt").read_text(),
+        "app/customer_harness.py": (RUNTIME_ROOT / "customer_harness.py.txt").read_text(),
+        "customer-harness.contract.json": json.dumps(
+            {
+                "version": "1.0",
+                "method": "POST",
+                "request": {"input": "string"},
+                "response": {"output": "string"},
+                "errors": {"error": "string"},
+                "limits": {"requestBytes": 1048576, "timeoutSeconds": 120},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
         "agent-workflow.json": json.dumps(graph, indent=2, sort_keys=True) + "\n",
         "requirements-agent.txt": (
             "httpx>=0.28,<1\nhttpx2>=2.13,<3\njsonschema>=4.23,<5\nmcp>=2.2,<3\nuvicorn>=0.34,<1\n"
@@ -36,12 +50,17 @@ def render_agent_files(
             "FROM python:3.12-slim\nWORKDIR /workspace\n"
             "COPY requirements-agent.txt .\nRUN pip install --no-cache-dir -r "
             "requirements-agent.txt\n"
-            "COPY app/agent_worker.py app/mcp_server.py ./app/\n"
+            "COPY app/agent_worker.py app/mcp_server.py app/customer_harness.py ./app/\n"
             "COPY agent-workflow.json workflow.py container_entry.py .\nUSER 65532:65532\n"
             "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1\n"
             'CMD ["python", "workflow.py", "plan"]\n'
         ),
     }
+    if any(
+        node["type"] == "model.predictive" and node["configuration"].get("adapter") == "onnxruntime"
+        for node in graph["nodes"]
+    ):
+        files["requirements-agent.txt"] += "onnxruntime>=1.20,<2\n"
     secret_names = references(graph)
     npm_packages = sorted(
         {
@@ -211,6 +230,23 @@ node in graph/code exports. Share reusable block libraries with Import/Export te
         "executable supplied by each Python package. Custom commands need "
         "their dependencies added to Containerfile.agent. Registry "
         "metadata is provenance, not endorsement.\n"
+    )
+    files["CUSTOM_HARNESS.md"] = "\n".join(
+        [
+            "# Customer harness development",
+            "",
+            "The contract is in `customer-harness.contract.json`. Send `POST` JSON",
+            '`{"input": "task text"}` and return `{"output": "result text"}`.',
+            "The generated `app/customer_harness.py` is a runnable, dependency-free",
+            "reference server; replace `run_task` with your orchestration adapter.",
+            "",
+            "Keep credentials in environment variables and set explicit request/model",
+            "timeouts. Validate tool arguments and require approval for side effects.",
+            "Framework SDKs are optional: add only the dependencies your harness needs",
+            "to `requirements-agent.txt`, then rebuild the image. This adapter does not",
+            "bypass the worker sandbox or grant access to the host filesystem.",
+            "",
+        ]
     )
     files.update(packaging_files(graph, slug, export_format))
     return files

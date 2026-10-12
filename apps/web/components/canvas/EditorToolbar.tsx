@@ -10,6 +10,7 @@ import {
   Boxes,
   Download,
   FolderOpen,
+  Gauge,
   KeyRound,
   Map,
   Package,
@@ -35,6 +36,7 @@ import {
 import { useExecutionStore } from "@/store/execution-store";
 import { useSelectionStore } from "@/store/selection-store";
 import { useValidationStore } from "@/store/validation-store";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 
 type EditorToolbarProps = {
   onOpenInfrastructureTokens?: () => void;
@@ -61,6 +63,9 @@ export function EditorToolbar({
   const undo = useProjectStore((state) => state.undo);
   const redo = useProjectStore((state) => state.redo);
   const markSaved = useProjectStore((state) => state.markSaved);
+  const persistenceError = useProjectStore((state) => state.persistenceError);
+  const lowResourceMode = useUiPreferencesStore((state) => state.lowResourceMode);
+  const setLowResourceMode = useUiPreferencesStore((state) => state.setLowResourceMode);
   const collapseSelectionToMacro = useProjectStore(
     (state) => state.collapseSelectionToMacro,
   );
@@ -101,6 +106,7 @@ export function EditorToolbar({
     <header className="flex flex-wrap items-center gap-3 border-b border-[var(--athanor-mist)] bg-white/90 px-4 py-3">
       <button type="button" className="rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs lg:hidden" onClick={onToggleNodeLibrary}>Node library</button>
       <button type="button" className="rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs lg:hidden" onClick={onToggleInspector}>Inspector</button>
+      {persistenceError && <p role="alert" className="basis-full text-xs text-red-700">{persistenceError}</p>}
       <Link
         href="/"
         className="flex shrink-0 items-center gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs font-medium text-[var(--athanor-slate)] hover:border-[var(--athanor-ember)] hover:text-[var(--athanor-ember)]"
@@ -217,6 +223,15 @@ export function EditorToolbar({
         >
           <Map className="size-4" /> Add swimlane
         </button>
+        <button
+          type="button"
+          aria-pressed={lowResourceMode}
+          title="Hide the minimap to reduce canvas rendering work"
+          className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
+          onClick={() => setLowResourceMode(!lowResourceMode)}
+        >
+          <Gauge className="size-4" /> {lowResourceMode ? "Low-resource view on" : "Low-resource view"}
+        </button>
         <fieldset className="flex flex-wrap items-center gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs">
           <legend className="sr-only">Export deployment targets</legend>
           <span
@@ -321,7 +336,7 @@ export function EditorToolbar({
             if (!file) return;
             try {
               const text = await file.text();
-              const imported = importProjectIntoLibrary(importGraphJson(text));
+              const imported = await importProjectIntoLibrary(importGraphJson(text));
               replaceGraph(imported, false);
               router.push(`/editor/${imported.project.id}`);
             } catch {

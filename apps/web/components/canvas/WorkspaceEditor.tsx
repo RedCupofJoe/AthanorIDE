@@ -31,7 +31,6 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
   const openGraphId = useProjectStore((state) => state.graph.project.id);
   const [missing, setMissing] = useState(false);
   const [rightPanel, setRightPanel] = useState<RightPanel>("inspector");
-
   const [mobilePanel, setMobilePanel] = useState<"palette" | "inspector" | null>(null);
 
   useEffect(() => {
@@ -44,10 +43,16 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
       document.body.style.overflow = previousBodyOverflow;
     };
   }, []);
+
   useEffect(() => {
     useProjectStore.setState({ hydrated: false });
-    const ok = hydrate(projectId);
-    setMissing(Boolean(projectId) && !ok);
+    let current = true;
+    void hydrate(projectId).then((ok) => {
+      if (current) setMissing(Boolean(projectId) && !ok);
+    }).catch(() => {
+      if (current) setMissing(Boolean(projectId));
+    });
+    return () => { current = false; };
   }, [hydrate, projectId]);
 
   useEffect(() => {

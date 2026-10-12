@@ -21,10 +21,10 @@ type ProjectLibraryState = {
   projects: ProjectSummary[];
   activeId: string | null;
   refresh: () => void;
-  create: (name?: string) => string;
-  createFromExample: (exampleId: string) => string | null;
-  rename: (id: string, name: string) => void;
-  remove: (id: string) => void;
+  create: (name?: string) => Promise<string>;
+  createFromExample: (exampleId: string) => Promise<string | null>;
+  rename: (id: string, name: string) => Promise<void>;
+  remove: (id: string) => Promise<void>;
   setActive: (id: string | null) => void;
 };
 
@@ -39,27 +39,27 @@ export const useProjectLibraryStore = create<ProjectLibraryState>((set, get) => 
     });
   },
 
-  create: (name) => {
-    const graph = createProject(name);
+  create: async (name) => {
+    const graph = await createProject(name);
     get().refresh();
     return graph.project.id;
   },
 
-  createFromExample: (exampleId) => {
+  createFromExample: async (exampleId) => {
     const built = buildExampleProject(exampleId);
     if (!built) return null;
-    const saved = importProjectIntoLibrary(built);
+    const saved = await importProjectIntoLibrary(built);
     get().refresh();
     return saved.project.id;
   },
 
-  rename: (id, name) => {
-    renameProject(id, name);
+  rename: async (id, name) => {
+    await renameProject(id, name);
     get().refresh();
   },
 
-  remove: (id) => {
-    deleteProject(id);
+  remove: async (id) => {
+    await deleteProject(id);
     get().refresh();
   },
 

@@ -50,36 +50,36 @@ describe("project library", () => {
     delete globalThis.localStorage;
   });
 
-  it("creates, lists, renames, and deletes projects", () => {
-    const a = createProject("Alpha");
-    const b = createProject("Beta");
+  it("creates, lists, renames, and deletes projects", async () => {
+    const a = await createProject("Alpha");
+    const b = await createProject("Beta");
     expect(listProjectSummaries().map((item) => item.name)).toEqual(["Beta", "Alpha"]);
 
-    renameProject(a.project.id, "Alpha Renamed");
-    expect(loadProjectGraph(a.project.id)?.project.name).toBe("Alpha Renamed");
+    await renameProject(a.project.id, "Alpha Renamed");
+    expect((await loadProjectGraph(a.project.id))?.project.name).toBe("Alpha Renamed");
     expect(listProjectSummaries().find((item) => item.id === a.project.id)?.name).toBe(
       "Alpha Renamed",
     );
 
-    deleteProject(b.project.id);
+    await deleteProject(b.project.id);
     expect(listProjectSummaries().map((item) => item.id)).toEqual([a.project.id]);
   });
 
-  it("persists project bodies across reads", () => {
-    const created = createProject("Persisted");
-    saveProjectGraph({
+  it("persists project bodies across reads", async () => {
+    const created = await createProject("Persisted");
+    await saveProjectGraph({
       ...created,
       project: { ...created.project, name: "Persisted" },
     });
-    const reloaded = loadProjectGraph(created.project.id);
+    const reloaded = await loadProjectGraph(created.project.id);
     expect(reloaded?.project.name).toBe("Persisted");
     expect(window.localStorage.getItem(PROJECT_INDEX_KEY)).toContain(created.project.id);
   });
 
-  it("starts a fresh agent library without migrating legacy projects", () => {
+  it("starts a fresh agent library without migrating legacy projects", async () => {
     window.localStorage.setItem("athanoride.projects.index.v1", JSON.stringify({ version: 1, activeId: "legacy", entries: [{ id: "legacy", name: "Old architecture" }] }));
     window.localStorage.setItem("athanoride.project.v1", "legacy content");
     expect(listProjectSummaries()).toEqual([]);
-    expect(loadProjectGraph("legacy")).toBeNull();
+    await expect(loadProjectGraph("legacy")).resolves.toBeNull();
   });
 });

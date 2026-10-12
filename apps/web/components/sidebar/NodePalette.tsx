@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 
 import { McpImportPanel } from "./McpImportPanel";
+import { SchemaImportPanel } from "./SchemaImportPanel";
 import { useBlockTemplateStore } from "@/store/block-template-store";
 import { serializeBlockTemplates } from "@/lib/block-templates";
 import { cn } from "@/lib/cn";
@@ -113,6 +114,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 export function NodePalette() {
   const [importMcp, setImportMcp] = useState(false);
   const [query, setQuery] = useState("");
+  const [importSchemas, setImportSchemas] = useState(false);
   const templateFile = useRef<HTMLInputElement>(null);
   const templates = useBlockTemplateStore(state => state.templates);
   const templateError = useBlockTemplateStore(state => state.error);
@@ -226,6 +228,8 @@ export function NodePalette() {
 
       <button type="button" className="rounded border border-[var(--athanor-ember)] bg-orange-50 px-3 py-2 text-sm text-[var(--athanor-ember)]" onClick={() => setImportMcp(true)}>Import MCP servers</button>
       {importMcp && <McpImportPanel onClose={() => setImportMcp(false)} />}
+      <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => setImportSchemas(true)}>Import OpenAPI / JSON Schema</button>
+      {importSchemas && <SchemaImportPanel onClose={() => setImportSchemas(false)} />}
       <input aria-label="Search blocks" placeholder="Search blocks…" value={query} onChange={event => setQuery(event.target.value)} className="w-full rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5 text-sm" />
       <div className="min-h-0 flex-1 space-y-4 overflow-auto">
         <section className="space-y-2">

@@ -14,7 +14,7 @@ from mcp.server.stdio import stdio_server
 from mcp.server.transport_security import TransportSecuritySettings
 import uvicorn
 
-from app.agent_worker import call_api_tool, connected
+from app.agent_worker import call_api_tool, call_predictive_model, connected
 
 
 async def deny_approval(name, arguments):
@@ -24,7 +24,7 @@ async def deny_approval(name, arguments):
 
 def build_server(graph, node):
     tools = {
-        n["configuration"]["toolName"]: n["configuration"]
+        n["configuration"]["toolName"]: {**n["configuration"], "_nodeType": n["type"]}
         for n in connected(graph, node, "tools")
     }
     resources = {
@@ -52,9 +52,9 @@ def build_server(graph, node):
         if params.name not in tools:
             raise ValueError("Unknown tool")
         try:
-            value = await call_api_tool(
-                tools[params.name], params.arguments or {}, deny_approval
-            )
+            cfg = tools[params.name]
+            call = call_predictive_model if cfg.get("_nodeType") == "model.predictive" else call_api_tool
+            value = await call(cfg, params.arguments or {}, deny_approval)
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text=json.dumps(value))]
             )

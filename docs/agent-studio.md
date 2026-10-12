@@ -47,6 +47,21 @@ review. Only bearer-token HTTP authentication is built in; other headers/auth sc
 need an exported adapter. URL placeholders and required package arguments need configuration.
 Legacy SSE and OCI registry packages are not automatically converted.
 
+### Importing typed tool schemas
+
+Use **Import OpenAPI / JSON Schema** to review OpenAPI JSON operations, a JSON Schema, or
+an MCP `tools/list` result. Import is deterministic and model-free. OpenAPI operations
+become editable API Tool nodes; MCP and standalone schemas become editable Tool Definition
+nodes. The importer never fetches remote `$ref` documents, installs packages, or calls an
+endpoint. Review the contract and configure credentials before export.
+
+An HTTP prediction API can be imported and connected to MCP Server Builder. **Predictive
+Model Tool** supports HTTP and MLflow-serving endpoints plus an optional local ONNX Runtime
+CPU adapter. ONNX weights are never fetched: include them in the exported image under
+`/models`; the matching optional runtime dependency is added only when that adapter is
+selected. Model loading occurs inside the exported worker container. Keep approval enabled
+for costly or sensitive predictions.
+
 Imported blocks retain source/version metadata and can become reusable templates.
 Select exact allowed tool names in the inspector; an empty list exposes no tools.
 Pinned packages install in the generated image during build. Confirm each PyPI package's
@@ -101,6 +116,19 @@ ADK, PydanticAI, and CrewAI. They POST a configurable task field and read a conf
 string response field. A deployed harness endpoint or wrapper is required. Native
 framework SDK scaffolds, remote approvals, checkpoints, and isolation are owned by that
 service. These are five curated alternatives, not a claimed popularity ranking.
+
+Agent exports include `CUSTOM_HARNESS.md`, a versioned JSON request/response contract, and
+a runnable stdlib reference adapter at `app/customer_harness.py`. Replace `run_task` to
+integrate a customer-owned orchestration framework. The example is a pass-through and does
+not load a model or call tools until you implement that behavior.
+
+The sidebar schema importer is deterministic and model-free. It accepts OpenAPI JSON,
+standalone JSON Schema, and MCP `tools/list` declarations, resolves local JSON Pointer
+references, and refuses remote, unresolved, or recursive references. Imported definitions
+are editable before use; importing does not fetch a server or install a package. Predictive
+model blocks support HTTP/MLflow inference and an optional CPU-only ONNX Runtime adapter.
+ONNX weights remain user-provided image assets. Importing general Hugging Face or MLflow
+model metadata into predictive-model forms is not yet supported.
 
 ## Canvas controls
 

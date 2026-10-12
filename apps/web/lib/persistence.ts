@@ -14,10 +14,10 @@ import {
   saveProjectGraph,
 } from "./project-library";
 
-export function loadPersistedGraph(): ArchitectureGraph | null {
+export async function loadPersistedGraph(): Promise<ArchitectureGraph | null> {
   const activeId = getActiveProjectId();
   if (activeId) {
-    const active = loadProjectGraph(activeId);
+    const active = await loadProjectGraph(activeId);
     if (active) return active;
   }
   const first = listProjectSummaries()[0];
@@ -27,8 +27,8 @@ export function loadPersistedGraph(): ArchitectureGraph | null {
   return null;
 }
 
-export function persistGraph(graph: ArchitectureGraph): void {
-  saveProjectGraph(graph);
+export async function persistGraph(graph: ArchitectureGraph): Promise<void> {
+  await saveProjectGraph(graph);
 }
 
 export function exportGraphJson(graph: ArchitectureGraph): string {

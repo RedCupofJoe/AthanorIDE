@@ -17,8 +17,8 @@ import {
   MiniMap,
   PanOnScrollMode,
   ReactFlow,
-  type FinalConnectionState,
   ReactFlowProvider,
+  type FinalConnectionState,
   useReactFlow,
   useNodesState,
   useEdgesState,
@@ -37,11 +37,10 @@ import type { MacroFlowNodeData } from "@/components/nodes/MacroBlockNode";
 import type { SwimlaneFlowNodeData } from "@/components/nodes/SwimlaneNode";
 import { lodFromZoom, lodLabel, type LodLevel } from "@/lib/lod";
 import {
-  isNodeHiddenByMacro,
   macroFlowId,
   macroPosition,
   parseMacroFlowId,
-  resolveMacroHandle,
+  macroPortBindings,
 } from "@/lib/macros";
 import { groupPortalsByBus } from "@/lib/portals";
 import {
@@ -56,7 +55,8 @@ import { usePendingDeleteStore } from "@/store/pending-delete-store";
 import { useProjectStore } from "@/store/project-store";
 import { useSelectionStore } from "@/store/selection-store";
 import { useValidationStore } from "@/store/validation-store";
-import { selectPayloadPreview, useExecutionStore } from "@/store/execution-store";
+import { useExecutionStore } from "@/store/execution-store";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 
 function rejectedConnectionReason(
   state: FinalConnectionState,
@@ -90,8 +90,8 @@ function CanvasInner() {
   const undo = useProjectStore((state) => state.undo);
   const redo = useProjectStore((state) => state.redo);
   const connectionError = useProjectStore((state) => state.connectionError);
-  const clearConnectionError = useProjectStore((state) => state.clearConnectionError);
   const setConnectionError = useProjectStore((state) => state.setConnectionError);
+  const clearConnectionError = useProjectStore((state) => state.clearConnectionError);
   const expandMacro = useProjectStore((state) => state.expandMacro);
   const updateMacroPosition = useProjectStore((state) => state.updateMacroPosition);
   const updateSwimlaneBounds = useProjectStore((state) => state.updateSwimlaneBounds);
@@ -111,6 +111,7 @@ function CanvasInner() {
   const nodesInitialized = useNodesInitialized();
   const initialFit = useRef(false);
   const [lod, setLod] = useState<LodLevel>(() => lodFromZoom(graph.viewport.zoom));
+  const lowResourceMode = useUiPreferencesStore((state) => state.lowResourceMode);
 
   const healthByNode = useMemo(() => {
     const map = new Map<string, ArchitectureFlowNodeData["health"]>();
@@ -141,12 +142,49 @@ function CanvasInner() {
     return map;
   }, [graph.deploymentEnvironments]);
 
+  const nodeIndexes = useMemo(() => {
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+    const countByDeployment = new Map<string, number>();
+    for (const node of graph.nodes) {
+      if (node.deploymentTarget) {
+        countByDeployment.set(node.deploymentTarget, (countByDeployment.get(node.deploymentTarget) ?? 0) + 1);
+      }
+    }
+    const executionByNode = new Map(executionSteps.map((step) => [step.nodeId, step]));
+    const payloadByNode = new Map<string, string>();
+    for (const step of executionSteps) {
+      const payload = step.nodeType === "foundation.output_viewer"
+        ? Object.values(step.inputs)[0] ?? null
+        : Object.values(step.outputs)[0] ?? step.message ?? null;
+      if (payload !== null) payloadByNode.set(step.nodeId, payload);
+    }
+    return { byId, countByDeployment, executionByNode, payloadByNode };
+  }, [executionSteps, graph.nodes]);
+
+  const collapsedMacroIndexes = useMemo(() => {
+    const hiddenByMacro = new Map<string, string>();
+    const byId = new Map(graph.macroBlocks.map((macro) => [macro.id, macro]));
+    const handleByNodePort = new Map<string, { macroId: string; handleId: string }>();
+    for (const macro of graph.macroBlocks) {
+      if (!macro.collapsed) continue;
+      for (const id of macro.nodeIds) hiddenByMacro.set(id, macro.id);
+      for (const [handleId, binding] of Object.entries(macroPortBindings(macro))) {
+        const direction = handleId.startsWith("macro-in-") ? "target" : "source";
+        handleByNodePort.set(`${binding.nodeId}\0${binding.portId}\0${direction}`, { macroId: macro.id, handleId });
+      }
+    }
+    return { hiddenByMacro, byId, handleByNodePort };
+  }, [graph.macroBlocks]);
+
+  const payloadByEdge = useMemo(
+    () => new Map(edgePayloads.map((payload) => [payload.edgeId, payload])),
+    [edgePayloads],
+  );
+
   const nodes: Node[] = useMemo(() => {
     const swimlaneNodes: Node[] = graph.deploymentEnvironments.map((lane) => {
       const bounds = swimlaneBounds(lane);
-      const nodeCount = graph.nodes.filter(
-        (node) => node.deploymentTarget === lane.id,
-      ).length;
+      const nodeCount = nodeIndexes.countByDeployment.get(lane.id) ?? 0;
       return {
         id: swimlaneFlowId(lane.id),
         type: "swimlane",
@@ -164,9 +202,9 @@ function CanvasInner() {
     });
 
     const architectureNodes: Node[] = graph.nodes
-      .filter((node) => !isNodeHiddenByMacro(node.id, graph.macroBlocks))
+      .filter((node) => !collapsedMacroIndexes.hiddenByMacro.has(node.id))
       .map((node) => {
-        const step = executionSteps.find((item) => item.nodeId === node.id);
+        const step = nodeIndexes.executionByNode.get(node.id);
         return {
           id: node.id,
           type: "architecture",
@@ -180,7 +218,7 @@ function CanvasInner() {
             deploymentLabel: node.deploymentTarget
               ? laneNameById.get(node.deploymentTarget)
               : undefined,
-            payloadPreview: selectPayloadPreview(executionSteps, node.id),
+            payloadPreview: nodeIndexes.payloadByNode.get(node.id),
             executionStatus: step?.status ?? null,
           } satisfies ArchitectureFlowNodeData,
         };
@@ -216,19 +254,19 @@ function CanvasInner() {
     laneNameById,
     lod,
     selectedNodeIds,
-    executionSteps,
+    nodeIndexes,
+    collapsedMacroIndexes,
   ]);
 
   const edges: Edge[] = useMemo(() => {
-    const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
     const result: Edge[] = [];
 
     for (const edge of graph.edges) {
-      const sourceHidden = isNodeHiddenByMacro(edge.sourceNodeId, graph.macroBlocks);
-      const targetHidden = isNodeHiddenByMacro(edge.targetNodeId, graph.macroBlocks);
-      if (sourceHidden && targetHidden && graph.macroBlocks.some(macro =>
-        macro.collapsed && macro.nodeIds.includes(edge.sourceNodeId) && macro.nodeIds.includes(edge.targetNodeId)
-      )) continue;
+      const sourceMacro = collapsedMacroIndexes.hiddenByMacro.get(edge.sourceNodeId);
+      const targetMacro = collapsedMacroIndexes.hiddenByMacro.get(edge.targetNodeId);
+      const sourceHidden = Boolean(sourceMacro);
+      const targetHidden = Boolean(targetMacro);
+      if (sourceMacro && sourceMacro === targetMacro) continue;
 
       let source = edge.sourceNodeId;
       let target = edge.targetNodeId;
@@ -236,33 +274,23 @@ function CanvasInner() {
       let targetHandle = edge.targetPortId;
 
       if (sourceHidden) {
-        const resolved = resolveMacroHandle(
-          graph.macroBlocks,
-          edge.sourceNodeId,
-          edge.sourcePortId,
-          "source",
-        );
+        const resolved = collapsedMacroIndexes.handleByNodePort.get(`${edge.sourceNodeId}\0${edge.sourcePortId}\0source`);
         if (!resolved) continue;
         source = macroFlowId(resolved.macroId);
         sourceHandle = resolved.handleId;
       }
       if (targetHidden) {
-        const resolved = resolveMacroHandle(
-          graph.macroBlocks,
-          edge.targetNodeId,
-          edge.targetPortId,
-          "target",
-        );
+        const resolved = collapsedMacroIndexes.handleByNodePort.get(`${edge.targetNodeId}\0${edge.targetPortId}\0target`);
         if (!resolved) continue;
         target = macroFlowId(resolved.macroId);
         targetHandle = resolved.handleId;
       }
 
-      const cross = isCrossEnvironmentEdge(edge, nodesById);
-      const payload = edgePayloads.find((item) => item.edgeId === edge.id);
+      const cross = isCrossEnvironmentEdge(edge, nodeIndexes.byId);
+      const payload = payloadByEdge.get(edge.id);
       const isSelected =
         selectedEdgeIds.includes(edge.id) || focusEdgeId === edge.id;
-      const sourceNode = nodesById.get(edge.sourceNodeId);
+      const sourceNode = nodeIndexes.byId.get(edge.sourceNodeId);
       const sourcePort = sourceNode?.outputs.find(
         (port) => port.id === edge.sourcePortId,
       );
@@ -313,9 +341,9 @@ function CanvasInner() {
         const inputs = portals.filter((node) => node.type === "foundation.portal_input");
         const outputs = portals.filter((node) => node.type === "foundation.portal_output");
         for (const output of outputs) {
-          if (isNodeHiddenByMacro(output.id, graph.macroBlocks)) continue;
+          if (collapsedMacroIndexes.hiddenByMacro.has(output.id)) continue;
           for (const input of inputs) {
-            if (isNodeHiddenByMacro(input.id, graph.macroBlocks)) continue;
+            if (collapsedMacroIndexes.hiddenByMacro.has(input.id)) continue;
             result.push({
               id: `portal-bus-${busId}-${output.id}-${input.id}`,
               source: output.id,
@@ -338,7 +366,7 @@ function CanvasInner() {
     }
 
     return result;
-  }, [focusEdgeId, graph.edges, graph.macroBlocks, graph.nodes, lod, selectedEdgeIds, edgePayloads]);
+  }, [focusEdgeId, graph.edges, graph.nodes, lod, selectedEdgeIds, collapsedMacroIndexes, nodeIndexes, payloadByEdge]);
 
   // Transient drag/selection state stays in React Flow. Commit graph positions once at drop.
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(nodes);
@@ -355,11 +383,9 @@ function CanvasInner() {
     const graph = useProjectStore.getState().graph;
     const node = graph.nodes.find((item) => item.id === focusNodeId);
     if (!node) return;
-    const hidden = isNodeHiddenByMacro(node.id, graph.macroBlocks);
-    if (hidden) {
-      const macro = graph.macroBlocks.find(
-        (item) => item.collapsed && item.nodeIds.includes(node.id),
-      );
+    const macroId = collapsedMacroIndexes.hiddenByMacro.get(node.id);
+    if (macroId) {
+      const macro = collapsedMacroIndexes.byId.get(macroId);
       if (macro) {
         const position = macroPosition(macro);
         void setCenter(position.x + 110, position.y + 40, {
@@ -373,7 +399,7 @@ function CanvasInner() {
       zoom: Math.max(getZoom(), 0.9),
       duration: 400,
     });
-  }, [focusNodeId, getZoom, setCenter]);
+  }, [collapsedMacroIndexes, focusNodeId, getZoom, setCenter]);
 
   useEffect(() => {
     if (!focusEdgeId) return;
@@ -671,6 +697,7 @@ function CanvasInner() {
         zoomOnScroll={false}
         panOnDrag={[1]}
         panActivationKeyCode="Space"
+        onlyRenderVisibleElements
         minZoom={0.1}
         maxZoom={2}
         defaultViewport={graph.viewport}
@@ -679,7 +706,7 @@ function CanvasInner() {
         aria-label="Architecture canvas"
       >
         <Background gap={16} size={1} color="#d6d3d1" />
-        <MiniMap pannable zoomable />
+        {!lowResourceMode && <MiniMap pannable zoomable />}
         <Controls showInteractive />
       </ReactFlow>
 

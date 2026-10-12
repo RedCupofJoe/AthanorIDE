@@ -36,6 +36,7 @@ import {
 } from "@/lib/swimlanes";
 
 const HISTORY_LIMIT = 50;
+const HISTORY_MEMORY_BUDGET_BYTES = 8 * 1024 * 1024;
 
 interface HistorySnapshot {
   nodes: ArchitectureNode[];
@@ -52,11 +53,12 @@ interface ProjectStore {
   past: HistorySnapshot[];
   future: HistorySnapshot[];
   connectionError: string | null;
+  persistenceError: string | null;
   hydrated: boolean;
   /** Load a specific project (or the active/persisted one when omitted). */
-  hydrate: (projectId?: string) => boolean;
+  hydrate: (projectId?: string) => Promise<boolean>;
   /** Switch the open workspace to another saved project. */
-  openProject: (projectId: string) => boolean;
+  openProject: (projectId: string) => Promise<boolean>;
   setProjectName: (name: string) => void;
   replaceGraph: (graph: ArchitectureGraph, recordHistory?: boolean) => void;
   addTemplate: (template: BlockTemplate) => string;
@@ -160,7 +162,10 @@ function applySnapshot(
 }
 
 function pushHistory(state: ProjectStore): Pick<ProjectStore, "past" | "future"> {
-  const nextPast = [...state.past, snapshotOf(state.graph)].slice(-HISTORY_LIMIT);
+  const snapshot = snapshotOf(state.graph);
+  const estimatedBytes = Math.max(1, JSON.stringify(snapshot).length * 2);
+  const budgetLimit = Math.max(1, Math.floor(HISTORY_MEMORY_BUDGET_BYTES / estimatedBytes));
+  const nextPast = [...state.past, snapshot].slice(-Math.min(HISTORY_LIMIT, budgetLimit));
   return { past: nextPast, future: [] };
 }
 
@@ -170,7 +175,10 @@ function schedulePersist(graph: ArchitectureGraph): void {
   if (typeof window === "undefined") return;
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
-    persistGraph(graph);
+    void persistGraph(graph).then(
+      () => useProjectStore.setState({ persistenceError: null }),
+      () => useProjectStore.setState({ persistenceError: "Could not save this project. Export a JSON backup and check browser storage space." }),
+    );
   }, 400);
 }
 
@@ -191,12 +199,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   past: [],
   future: [],
   connectionError: null,
+  persistenceError: null,
   hydrated: false,
 
-  hydrate: (projectId) => {
+  hydrate: async (projectId) => {
     const targetId = projectId ?? getActiveProjectId() ?? undefined;
     if (targetId) {
-      const loaded = loadProjectGraph(targetId);
+      const loaded = await loadProjectGraph(targetId);
       if (loaded) {
         setActiveProjectId(loaded.project.id);
         set({
@@ -214,7 +223,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       }
     }
 
-    const persisted = loadPersistedGraph();
+    const persisted = await loadPersistedGraph();
     if (persisted) {
       setActiveProjectId(persisted.project.id);
       set({
@@ -231,8 +240,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     return true;
   },
 
-  openProject: (projectId) => {
-    const loaded = loadProjectGraph(projectId);
+  openProject: async (projectId) => {
+    const loaded = await loadProjectGraph(projectId);
     if (!loaded) return false;
     setActiveProjectId(loaded.project.id);
     set({
@@ -523,8 +532,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     });
   },
 
-  clearConnectionError: () => set({ connectionError: null }),
   setConnectionError: (message) => set({ connectionError: message }),
+  clearConnectionError: () => set({ connectionError: null }),
 
   undo: () => {
     set((state) => {
@@ -591,7 +600,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
 
   markSaved: () => {
-    persistGraph(get().graph);
+    void persistGraph(get().graph).then(
+      () => set({ persistenceError: null }),
+      () => set({ persistenceError: "Could not save this project. Export a JSON backup and check browser storage space." }),
+    );
   },
 
   collapseSelectionToMacro: (nodeIds, name) => {

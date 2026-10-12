@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from contextlib import AsyncExitStack
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -97,6 +98,68 @@ async def call_api_tool(config: dict, arguments: dict, approval=approve) -> Any:
     return await request_json(config, arguments, config["method"])
 
 
+_ONNX_SESSIONS = {}
+
+
+async def call_predictive_model(config: dict, arguments: dict, approval=approve) -> Any:
+    schema = json.loads(config["inputSchema"])
+    check_arguments(schema, arguments)
+    name = config["toolName"]
+    if config.get("requiresApproval", True) and not await approval(name, arguments):
+        raise PermissionError("Model invocation requires approval")
+    adapter = config.get("adapter", "http")
+    if adapter in {"http", "mlflow"}:
+        request = dict(config)
+        request["method"] = "POST"
+        return await request_json(request, arguments, request["method"])
+    if adapter != "onnxruntime":
+        raise ValueError("Unsupported predictive model adapter")
+
+    path = Path(config.get("modelPath", ""))
+    resolved = path.resolve()
+    if not resolved.is_relative_to(Path("/models")) or not resolved.is_file():
+        raise ValueError("ONNX model must be included inside the image under /models")
+
+    def infer() -> Any:
+        try:
+            import numpy as np
+            import onnxruntime as ort
+        except ImportError as exc:
+            raise RuntimeError("Install the optional onnxruntime CPU dependency in the exported image") from exc
+        session = _ONNX_SESSIONS.get(str(resolved))
+        if session is None:
+            options = ort.SessionOptions()
+            options.intra_op_num_threads = max(1, min(2, int(os.environ.get("ATHANOR_ONNX_THREADS", "2"))))
+            session = ort.InferenceSession(str(resolved), sess_options=options, providers=["CPUExecutionProvider"])
+            _ONNX_SESSIONS[str(resolved)] = session
+        model_inputs = {item.name: item for item in session.get_inputs()}
+        if set(arguments) != set(model_inputs):
+            raise ValueError("Prediction arguments must match the ONNX model input names")
+        tensors = {}
+        for input_name, descriptor in model_inputs.items():
+            value = arguments[input_name]
+            if descriptor.type == "tensor(string)":
+                array = np.asarray(value, dtype=np.str_)
+            elif descriptor.type == "tensor(bool)":
+                array = np.asarray(value, dtype=np.bool_)
+            elif descriptor.type == "tensor(int64)":
+                array = np.asarray(value, dtype=np.int64)
+            elif descriptor.type == "tensor(int32)":
+                array = np.asarray(value, dtype=np.int32)
+            elif descriptor.type == "tensor(double)":
+                array = np.asarray(value, dtype=np.float64)
+            else:
+                array = np.asarray(value, dtype=np.float32)
+            tensors[input_name] = array
+        outputs = session.run(None, tensors)
+        result = {item.name: value.tolist() for item, value in zip(session.get_outputs(), outputs, strict=True)}
+        if len(json.dumps(result).encode("utf-8")) > MAX_RESPONSE_BYTES:
+            raise ValueError("Model response exceeds 2 MB")
+        return result
+
+    return await asyncio.to_thread(infer)
+
+
 async def run_agent(graph: dict, node: dict, task: str, approval=approve) -> str:
     config = node["configuration"]
     model = connected(graph, node, "model")[0]["configuration"]
@@ -118,6 +181,8 @@ async def run_agent(graph: dict, node: dict, task: str, approval=approve) -> str
         }
 
         async def call(arguments: dict) -> Any:
+            if tool["type"] == "model.predictive":
+                return await call_predictive_model(cfg, arguments, approval)
             return await call_api_tool(cfg, arguments, approval)
 
         callbacks[name] = call

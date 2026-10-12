@@ -57,6 +57,17 @@ The five harnesses and five sandbox choices are curated alternatives, not a popu
 
 You can design, validate, preview agent blocks, and download exports without a container engine. Dependency installation, image builds, registry search, and remote endpoint execution need network access as appropriate.
 
+### MacBook Air setup (Apple Silicon or Intel)
+
+The IDE runs locally in your browser; this installs the development services and does not create a signed `.app` or `.dmg` installer. Install [Homebrew](https://brew.sh) and Apple's Command Line Tools first. From Terminal, clone the repository, enter its directory, and run:
+
+```bash
+./scripts/install-macos.sh
+make dev
+```
+
+The installer detects Apple Silicon (`arm64`) or Intel (`x86_64`). If Node.js 20+ or Python 3.12+ is missing, it offers to install those dependencies with Homebrew. If Make is missing, install Command Line Tools with `xcode-select --install` and run the installer again. It then runs the same `make install` used on Linux. Open [localhost:3000](http://localhost:3000); stop the services with Ctrl+C. The default development workflow does not require Podman. Use `make install-macos` as an equivalent entry point when Make is already available.
+
 ### Local development
 
 From the repository root:

@@ -45,6 +45,9 @@ export function HomeShell() {
             >
               API docs
             </a>
+            <Link href="/marketplace" className="rounded border border-[var(--athanor-mist)] bg-white/70 px-4 py-2 text-sm hover:border-[var(--athanor-ember)]">
+              Open-source marketplace
+            </Link>
           </div>
         </header>
 

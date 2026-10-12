@@ -8,8 +8,10 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 type UiPreferencesState = {
   paletteCompact: boolean;
+  lowResourceMode: boolean;
   setPaletteCompact: (compact: boolean) => void;
   togglePaletteCompact: () => void;
+  setLowResourceMode: (enabled: boolean) => void;
 };
 
 const memoryStorage = () => {
@@ -29,7 +31,9 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
   persist(
     (set) => ({
       paletteCompact: false,
+      lowResourceMode: false,
       setPaletteCompact: (paletteCompact) => set({ paletteCompact }),
+      setLowResourceMode: (lowResourceMode) => set({ lowResourceMode }),
       togglePaletteCompact: () =>
         set((state) => ({ paletteCompact: !state.paletteCompact })),
     }),

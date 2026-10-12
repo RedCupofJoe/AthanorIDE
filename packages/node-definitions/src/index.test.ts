@@ -21,7 +21,7 @@ describe("node definitions catalog", () => {
     expect(types).toContain("big_blocks.postgres_pgvector");
     expect(types).toContain("big_blocks.guardrail_builder");
     expect(types).toContain("enterprise.primary_vector_dbs");
-    expect(types).toHaveLength(59);
+    expect(types).toHaveLength(60);
   });
 
   it("creates a text input node with STRING output", () => {

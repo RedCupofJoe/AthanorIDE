@@ -27,8 +27,9 @@ export default function EditorIndexPage() {
       router.replace(`/editor/${first.id}`);
       return;
     }
-    const created = createProject("Untitled project");
-    router.replace(`/editor/${created.project.id}`);
+    void createProject("Untitled project").then((created) => {
+      router.replace(`/editor/${created.project.id}`);
+    });
   }, [router]);
 
   return (

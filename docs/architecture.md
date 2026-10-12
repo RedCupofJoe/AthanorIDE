@@ -30,10 +30,25 @@ Opinionated multi-tech composites live in the **Big Blocks** catalog category (`
 
 Persisted projects are JSON documents conforming to `packages/contracts/schema/architecture-graph.v1.schema.json`.
 
-Browser library keys:
+Browser persistence:
 
-- Index: `athanoride.projects.index.v1`
-- Bodies: `athanoride.project.<id>.v1`
+- Project metadata index remains in localStorage: `athanoride.agents.projects.index.v1`.
+- Project graph bodies are stored in IndexedDB; old localStorage project bodies are migrated
+  on read. Restricted browsers fall back to localStorage and the editor reports save errors.
+- Marketplace snapshots are cached independently in IndexedDB and refreshed every 24 hours
+  while the app is open.
+
+Canvas derivation builds node, edge-payload, deployment-count, execution, and collapsed-macro
+indexes once per relevant graph snapshot. React Flow retains viewport culling; dragging is
+transient in the canvas and graph positions are persisted once on drop. Low-resource mode
+removes the minimap, and undo snapshots are capped to approximately 8 MiB. The FastAPI
+process sends graph validation, execution, compiler, export, and catalog-refresh work to a
+two-job worker limit; requests above capacity get a structured 503 and `Retry-After` hint.
+The current baseline target is 8 GB RAM and 4 CPU cores. These settings reduce overhead but
+are not a measured performance guarantee; interactive rendering benchmarks across hardware remain future work.
+Run `PYTHONPATH=apps/api uv run --project apps/api python scripts/benchmark_graph_validation.py`
+to record graph-validation timings for 300, 999, and 3,000-node sample graphs on the current
+machine. The benchmark reports timings without machine-independent pass/fail thresholds.
 
 See [ADR 0001](./decisions/0001-canonical-graph-schema.md) and [ADR 0009](./decisions/0009-multi-project-library.md).
 
@@ -43,7 +58,8 @@ See [ADR 0001](./decisions/0001-canonical-graph-schema.md) and [ADR 0009](./deci
 Browser (Next.js)
   ├─ /                    project library + examples
   ├─ /editor/[projectId]  canvas (Zustand + @xyflow/react)
-  ├─ local persistence    multi-project localStorage
+  ├─ local persistence    IndexedDB graph bodies + localStorage metadata index
+  ├─ /marketplace         locally cached package/advisory snapshot
   └─ API calls ──────────► FastAPI
                             ├─ GET  /api/v1/health
                             ├─ GET  /api/v1/node-definitions
@@ -51,7 +67,9 @@ Browser (Next.js)
                             ├─ POST /api/v1/projects/execute
                             ├─ POST /api/v1/projects/export
                             ├─ POST /api/v1/compiler/generate
-                            └─ POST /api/v1/compiler/validate
+                            ├─ POST /api/v1/compiler/validate
+                            ├─ GET  /api/v1/marketplace/topics
+                            └─ POST /api/v1/marketplace/refresh
 ```
 
 Generated transforms are never executed on the API host interpreter — only in the rootless Podman sandbox (or via the deterministic Phase-2 classifier for uncompiled instructions).
@@ -73,6 +91,7 @@ Generated transforms are never executed on the API host interpreter — only in 
 - Secrets are referenced, never embedded in exported repositories (`.env.example` only).
 - Structured API errors; no raw stack traces to clients.
 - Full detail: [security-model.md](./security-model.md)
+- Marketplace sources, refresh cadence, and coverage limitations: [marketplace.md](./marketplace.md)
 
 ## Further reading
 

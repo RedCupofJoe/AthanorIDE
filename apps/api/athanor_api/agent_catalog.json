@@ -256,6 +256,136 @@
     "exportKind": "agent_studio"
   },
   {
+    "type": "model.predictive",
+    "displayName": "Predictive Model Tool",
+    "category": "agents",
+    "icon": "cpu",
+    "description": "Wrap an HTTP, MLflow-serving, or local ONNX Runtime prediction model as a typed agent and MCP tool.",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "tool",
+        "direction": "output",
+        "contractType": "TOOL_DEFINITION",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "toolName",
+        "label": "Tool name",
+        "description": "Stable tool name advertised to the agent or MCP client.",
+        "defaultValue": "predict",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "description",
+        "label": "Description",
+        "description": "Explain what the model predicts and its intended input.",
+        "defaultValue": "Run a prediction using the configured model.",
+        "required": true,
+        "type": "text"
+      },
+      {
+        "key": "adapter",
+        "label": "Model adapter",
+        "description": "HTTP and MLflow use a reachable endpoint; ONNX runs with the CPU provider inside the exported worker.",
+        "defaultValue": "http",
+        "required": true,
+        "type": "select",
+        "options": [
+          "http",
+          "mlflow",
+          "onnxruntime"
+        ]
+      },
+      {
+        "key": "endpoint",
+        "label": "Prediction endpoint",
+        "description": "HTTP inference URL or MLflow /invocations endpoint.",
+        "defaultValue": "https://models.example.com/predict",
+        "required": true,
+        "type": "string",
+        "showWhen": {
+          "key": "adapter",
+          "equals": [
+            "http",
+            "mlflow"
+          ]
+        }
+      },
+      {
+        "key": "method",
+        "label": "HTTP method",
+        "description": "Prediction endpoint method.",
+        "defaultValue": "POST",
+        "required": true,
+        "type": "select",
+        "options": [
+          "POST"
+        ],
+        "showWhen": {
+          "key": "adapter",
+          "equals": [
+            "http",
+            "mlflow"
+          ]
+        }
+      },
+      {
+        "key": "modelPath",
+        "label": "ONNX model path",
+        "description": "Path inside the exported container image. Add the model to /models in the Containerfile.",
+        "defaultValue": "/models/model.onnx",
+        "required": true,
+        "type": "string",
+        "showWhen": {
+          "key": "adapter",
+          "equals": "onnxruntime"
+        }
+      },
+      {
+        "key": "inputSchema",
+        "label": "Prediction input schema",
+        "description": "JSON Schema 2020-12 for prediction arguments.",
+        "defaultValue": "{\"type\":\"object\",\"properties\":{\"features\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}},\"required\":[\"features\"],\"additionalProperties\":false}",
+        "required": true,
+        "type": "schema"
+      },
+      {
+        "key": "requiresApproval",
+        "label": "Require approval before prediction",
+        "description": "Keep enabled when inference has cost or sensitive inputs.",
+        "defaultValue": true,
+        "required": true,
+        "type": "boolean"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Request timeout (seconds)",
+        "description": "Maximum time for one endpoint request.",
+        "defaultValue": 30,
+        "required": true,
+        "type": "number",
+        "advanced": true
+      }
+    ],
+    "documentation": "Creates a contract-checked tool that can connect to Sandboxed Agent or MCP Server Builder. HTTP and MLflow serving use the same bounded HTTP client, reject redirects, and require credentials by environment name. ONNX Runtime is optional, CPU-only, loaded from the image-local /models path, and never downloaded or executed by the IDE. Add ONNX files and the optional onnxruntime package to the exported image yourself; the default generated image does not include model weights.",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
     "type": "agent.custom_tool",
     "displayName": "Custom API Block",
     "category": "agents",

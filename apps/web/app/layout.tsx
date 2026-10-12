@@ -1,6 +1,7 @@
 /** Root Next.js layout: fonts, global CSS, and document shell. */
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
+import { MarketplaceRefreshOnLaunch } from "@/components/MarketplaceRefreshOnLaunch";
 
 import "./globals.css";
 
@@ -44,6 +45,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${display.variable} ${sans.variable} antialiased font-[family-name:var(--font-sans)]`}>
+        <MarketplaceRefreshOnLaunch />
         {children}
       </body>
     </html>

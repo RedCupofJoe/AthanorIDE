@@ -432,3 +432,65 @@ def test_imported_packages_generate_pinned_build_and_names_only():
     data["nodes"][-1]["configuration"]["packageSpec"] = "@example/server@latest"
     with pytest.raises(ExportError):
         export_architecture_graph(ArchitectureGraph.model_validate(data))
+
+
+def test_export_includes_customer_harness_contract_and_reference_adapter():
+    result = export_architecture_graph(ArchitectureGraph.model_validate(graph_dict()))
+    contract = json.loads(result.files["customer-harness.contract.json"])
+    assert contract["request"] == {"input": "string"}
+    assert contract["response"] == {"output": "string"}
+    assert "run_task" in result.files["app/customer_harness.py"]
+    assert "CUSTOM_HARNESS.md" in result.files
+    assert "app/customer_harness.py" in result.files["Containerfile.agent"]
+
+
+def test_predictive_onnx_tool_is_optional_cpu_runtime_and_mcp_wrappable():
+    data = graph_dict()
+    model_node = node(
+        "model.predictive",
+        adapter="onnxruntime",
+        modelPath="/models/classifier.onnx",
+        requiresApproval=False,
+    )
+    data["nodes"].append(model_node)
+    data["edges"].append(
+        {
+            "id": "predictive-tool",
+            "sourceNodeId": model_node["id"],
+            "sourcePortId": "out-tool",
+            "targetNodeId": "agent.sandboxed",
+            "targetPortId": "in-tools",
+        }
+    )
+    server_node = node("mcp.server", serverName="predictive-tools")
+    data["nodes"].append(server_node)
+    data["edges"].append(
+        {
+            "id": "predictive-mcp",
+            "sourceNodeId": model_node["id"],
+            "sourcePortId": "out-tool",
+            "targetNodeId": server_node["id"],
+            "targetPortId": "in-tools",
+        }
+    )
+    data["edges"].append(
+        {
+            "id": "predictive-sandbox",
+            "sourceNodeId": "sandbox.podman",
+            "sourcePortId": "out-sandbox",
+            "targetNodeId": server_node["id"],
+            "targetPortId": "in-sandbox",
+        }
+    )
+    result = export_architecture_graph(ArchitectureGraph.model_validate(data))
+    assert "onnxruntime>=1.20,<2" in result.files["requirements-agent.txt"]
+    assert "CPUExecutionProvider" in result.files["app/agent_worker.py"]
+    assert "call_predictive_model" in result.files["app/mcp_server.py"]
+
+
+def test_predictive_onnx_path_cannot_escape_models_directory():
+    data = graph_dict()
+    model_node = node("model.predictive", adapter="onnxruntime", modelPath="/tmp/model.onnx")
+    data["nodes"].append(model_node)
+    issues = validate_architecture_graph(ArchitectureGraph.model_validate(data))
+    assert any(issue.code == "MODEL_PATH_OUTSIDE_IMAGE_MODELS" for issue in issues)

@@ -142,7 +142,9 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
                     "Remove the value and set an environment variable name instead.",
                 )
         endpoint = cfg.get("endpoint")
-        if isinstance(endpoint, str):
+        if isinstance(endpoint, str) and not (
+            node.type == "model.predictive" and cfg.get("adapter") == "onnxruntime"
+        ):
             try:
                 url = urlparse(endpoint)
                 valid_url = (
@@ -166,6 +168,15 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
                     "AGENT_INVALID_ENDPOINT",
                     "Endpoint must be an absolute HTTP(S) URL without credentials or fragments.",
                     "Paste the full API URL and put credentials in the environment.",
+                )
+        if node.type == "model.predictive" and cfg.get("adapter") == "onnxruntime":
+            model_path = str(cfg.get("modelPath", ""))
+            if not model_path.startswith("/models/") or ".." in model_path.split("/"):
+                issue(
+                    node.id,
+                    "MODEL_PATH_OUTSIDE_IMAGE_MODELS",
+                    "ONNX model path must stay under /models in the exported image.",
+                    "Set a path such as /models/model.onnx and add the model to the image build.",
                 )
         if cfg.get("secretName") and not re.fullmatch(
             r"[A-Za-z_][A-Za-z0-9_]*", str(cfg["secretName"])
@@ -286,7 +297,7 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
         allowed: dict[str, Callable[[str], bool]] = {
             "sandbox": lambda t: t.startswith("sandbox."),
             "model": lambda t: t == "agent.model",
-            "tools": lambda t: t in {"agent.tool", "agent.custom_tool"},
+            "tools": lambda t: t in {"agent.tool", "agent.custom_tool", "model.predictive"},
             "mcp": lambda t: t in {"mcp.client", "mcp.server", "mcp.stdio"},
             "resources": lambda t: t == "mcp.resource",
             "prompts": lambda t: t == "mcp.prompt",

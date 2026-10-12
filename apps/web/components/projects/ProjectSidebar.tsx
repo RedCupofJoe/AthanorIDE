@@ -45,13 +45,13 @@ export function ProjectSidebar() {
     router.push(`/editor/${id}`);
   };
 
-  const onCreate = () => {
-    const id = create("Untitled project");
+  const onCreate = async () => {
+    const id = await create("Untitled project");
     router.push(`/editor/${id}`);
   };
 
-  const onCreateExample = (exampleId: string) => {
-    const id = createFromExample(exampleId);
+  const onCreateExample = async (exampleId: string) => {
+    const id = await createFromExample(exampleId);
     if (!id) return;
     router.push(`/editor/${id}`);
   };
@@ -63,7 +63,7 @@ export function ProjectSidebar() {
 
   const commitRename = () => {
     if (!renamingId) return;
-    rename(renamingId, renameValue);
+    void rename(renamingId, renameValue);
     setRenamingId(null);
   };
 

@@ -1,4 +1,4 @@
-.PHONY: install bootstrap-tools dev lint typecheck test podman-up podman-down clean help
+.PHONY: install install-macos bootstrap-tools dev lint typecheck test podman-up podman-down clean help
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 TOOLS_DIR := $(ROOT_DIR)/.tools
@@ -10,6 +10,7 @@ UV ?= $(shell command -v uv 2>/dev/null || echo $(TOOLS_DIR)/uv)
 help:
 	@echo "AthanorIDE Make targets:"
 	@echo "  make install       Bootstrap tools and install dependencies"
+	@echo "  make install-macos Guided macOS setup for Intel and Apple Silicon Macs"
 	@echo "  make dev           Run API + web for local development"
 	@echo "  make lint          Lint TypeScript and Python"
 	@echo "  make typecheck     Type-check TypeScript and Python"
@@ -29,6 +30,9 @@ install: bootstrap-tools
 	@$(PNPM) --filter @athanor/contracts build
 	@$(PNPM) --filter @athanor/node-definitions build
 	@$(PNPM) --filter @athanor/ui build
+
+install-macos:
+	@bash "$(ROOT_DIR)/scripts/install-macos.sh"
 
 dev: bootstrap-tools
 	@echo "==> Rebuilding shared TypeScript packages (palette/catalog)"

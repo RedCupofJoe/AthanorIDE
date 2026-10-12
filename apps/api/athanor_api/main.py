@@ -6,7 +6,9 @@ import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from functools import partial
 
+import anyio
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +20,12 @@ from athanor_api.compiler import compile_transformation, validate_compiled_sourc
 from athanor_api.execution import execute_architecture_graph
 from athanor_api.exporter import ExportError, export_architecture_graph
 from athanor_api.logging_config import bind_correlation_id, configure_logging
+from athanor_api.marketplace import (
+    MARKETPLACE_TOPICS,
+    MarketplaceSnapshot,
+    MarketplaceTopic,
+    refresh_marketplace,
+)
 from athanor_api.schemas.api import (
     AuditRecordModel,
     CompilerGenerateRequest,
@@ -46,6 +54,27 @@ from athanor_api.vault.routes import router as vault_router
 
 configure_logging()
 logger = logging.getLogger(__name__)
+CPU_WORK_LIMITER = anyio.CapacityLimiter(2)
+
+
+class WorkerCapacityError(Exception):
+    """The bounded CPU worker pool is at capacity."""
+
+
+async def run_cpu_bound[ResultT](
+    function: Callable[..., ResultT], /, *args: object, **kwargs: object
+) -> ResultT:
+    """Run blocking validation/execution/export work off the ASGI event loop."""
+
+    try:
+        CPU_WORK_LIMITER.acquire_nowait()
+    except anyio.WouldBlock as exc:
+        raise WorkerCapacityError from exc
+    try:
+        return await anyio.to_thread.run_sync(partial(function, *args, **kwargs))
+    finally:
+        CPU_WORK_LIMITER.release()
+
 
 app = FastAPI(
     title=settings.app_name,
@@ -64,6 +93,28 @@ app.add_middleware(
 )
 
 app.include_router(vault_router)
+
+
+@app.get("/api/v1/marketplace/topics", response_model=list[MarketplaceTopic], tags=["marketplace"])
+async def marketplace_topics() -> list[MarketplaceTopic]:
+    """List marketplace capability areas without requiring external services."""
+
+    return [MarketplaceTopic(id=key, label=value) for key, value in MARKETPLACE_TOPICS.items()]
+
+
+@app.post("/api/v1/marketplace/refresh", response_model=MarketplaceSnapshot, tags=["marketplace"])
+async def marketplace_refresh() -> MarketplaceSnapshot:
+    """Refresh public npm package metadata and exact-version OSV advisories."""
+
+    started = time.perf_counter()
+    snapshot = await run_cpu_bound(refresh_marketplace)
+    logger.info(
+        "marketplace refresh duration_ms=%.2f entries=%s unavailable_topics=%s",
+        (time.perf_counter() - started) * 1000,
+        len(snapshot.entries),
+        len(snapshot.unavailable_topics),
+    )
+    return snapshot
 
 
 @app.middleware("http")
@@ -124,6 +175,23 @@ async def validation_exception_handler(
     )
 
 
+@app.exception_handler(WorkerCapacityError)
+async def worker_capacity_exception_handler(
+    request: Request, exc: WorkerCapacityError
+) -> JSONResponse:
+    del exc
+    correlation_id = request.headers.get("X-Correlation-ID") or "-"
+    return JSONResponse(
+        status_code=503,
+        headers={"Retry-After": "2"},
+        content=_error_payload(
+            error="worker_capacity",
+            message="Athanor is processing its maximum number of background jobs. Retry shortly.",
+            correlation_id=correlation_id,
+        ),
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     # Never return raw stack traces to clients.
@@ -171,7 +239,7 @@ async def validate_project(body: ValidateProjectRequest) -> ValidateProjectRespo
     """Validate an architecture graph without executing the pipeline."""
 
     started = time.perf_counter()
-    issues = validate_architecture_graph(body.graph)
+    issues = await run_cpu_bound(validate_architecture_graph, body.graph)
     duration_ms = (time.perf_counter() - started) * 1000
     error_count = sum(1 for issue in issues if issue.severity == "error")
     logger.info(
@@ -195,7 +263,8 @@ async def validate_project(body: ValidateProjectRequest) -> ValidateProjectRespo
 async def execute_project(body: ExecuteProjectRequest) -> ExecuteProjectResponse:
     """Execute the graph for payload inspection (safe: no arbitrary host code)."""
 
-    result = execute_architecture_graph(
+    result = await run_cpu_bound(
+        execute_architecture_graph,
         body.graph,
         override_text=body.override_text,
     )
@@ -245,7 +314,8 @@ async def export_project(body: ExportProjectRequest) -> ExportProjectResponse:
     """Export a validated architecture graph into a deterministic repository."""
 
     try:
-        result = export_architecture_graph(
+        result = await run_cpu_bound(
+            export_architecture_graph,
             body.graph,
             export_format=body.export_format,
             include_docker_compat=body.include_docker_compat,
@@ -317,7 +387,8 @@ async def compiler_generate(body: CompilerGenerateRequest) -> CompilerGenerateRe
     """Compile a natural-language transformation through the safe pipeline."""
 
     started = time.perf_counter()
-    artifacts = compile_transformation(
+    artifacts = await run_cpu_bound(
+        compile_transformation,
         instruction=body.instruction,
         input_schema=body.input_schema,
         output_schema=body.output_schema,
@@ -354,7 +425,8 @@ async def compiler_validate(body: CompilerValidateRequest) -> CompilerValidateRe
     """Validate previously generated transformation source."""
 
     started = time.perf_counter()
-    artifacts = validate_compiled_source(
+    artifacts = await run_cpu_bound(
+        validate_compiled_source,
         body.source_code,
         sample_input=body.sample_input,
     )
