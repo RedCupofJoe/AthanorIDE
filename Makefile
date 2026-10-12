@@ -4,7 +4,7 @@ ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 TOOLS_DIR := $(ROOT_DIR)/.tools
 export PATH := $(TOOLS_DIR):$(TOOLS_DIR)/py/bin:$(PATH)
 
-PNPM ?= $(shell command -v pnpm 2>/dev/null || echo $(TOOLS_DIR)/pnpm)
+PNPM ?= $(TOOLS_DIR)/pnpm
 UV ?= $(shell command -v uv 2>/dev/null || echo $(TOOLS_DIR)/uv)
 
 help:

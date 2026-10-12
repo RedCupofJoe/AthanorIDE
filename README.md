@@ -51,7 +51,7 @@ The five harnesses and five sandbox choices are curated alternatives, not a popu
 | Node.js 20+ and npm | Frontend, shared packages, and tool bootstrap; CI uses Node 22 |
 | Python 3.12+ with pip available | API and tool bootstrap; CI uses Python 3.12 |
 | Make, Bash, and tar | Repository setup scripts |
-| pnpm and uv | JavaScript/Python dependency management; `make install` bootstraps them into `.tools/` when absent |
+| pnpm and uv | JavaScript/Python dependency management; `make install` bootstraps project-pinned pnpm 9.15.0 and uv into `.tools/` |
 | Podman or Docker | Running exported containers; Podman is also needed for `make podman-up` and retained transform sandboxes |
 | Helm / `oc` / cluster access | Only when validating or deploying the corresponding cluster export |
 

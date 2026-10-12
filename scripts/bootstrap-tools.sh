@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOLS_DIR="${ROOT_DIR}/.tools"
+PNPM_VERSION="9.15.0"
 mkdir -p "${TOOLS_DIR}"
 
 need_cmd() {
@@ -11,27 +12,40 @@ need_cmd() {
 }
 
 ensure_pnpm() {
-  if need_cmd pnpm; then
-    echo "pnpm: $(command -v pnpm) ($(pnpm -v))"
-    return
-  fi
   if [[ -x "${TOOLS_DIR}/pnpm" ]]; then
-    echo "pnpm: ${TOOLS_DIR}/pnpm ($("${TOOLS_DIR}/pnpm" -v))"
-    return
+    local installed_version
+    installed_version="$("${TOOLS_DIR}/pnpm" -v 2>/dev/null || true)"
+    if [[ "${installed_version}" == "${PNPM_VERSION}" ]]; then
+      echo "pnpm: ${TOOLS_DIR}/pnpm (${installed_version})"
+      return
+    fi
+    echo "Replacing project-local pnpm ${installed_version:-unknown} with pinned ${PNPM_VERSION}."
   fi
   if ! need_cmd npm || ! need_cmd node; then
     echo "Node.js and npm are required to bootstrap pnpm." >&2
     exit 1
   fi
-  echo "Installing project-local pnpm into .tools/"
-  npm pack pnpm --pack-destination "${TOOLS_DIR}" >/dev/null
-  tar -xzf "${TOOLS_DIR}"/pnpm-*.tgz -C "${TOOLS_DIR}"
+  echo "Installing project-local pnpm ${PNPM_VERSION} into .tools/"
+  rm -rf "${TOOLS_DIR}/package"
+  npm pack "pnpm@${PNPM_VERSION}" --pack-destination "${TOOLS_DIR}" >/dev/null
+  tar -xzf "${TOOLS_DIR}/pnpm-${PNPM_VERSION}.tgz" -C "${TOOLS_DIR}"
+  if [[ ! -f "${TOOLS_DIR}/package/bin/pnpm.cjs" ]]; then
+    echo "The pnpm ${PNPM_VERSION} archive is missing package/bin/pnpm.cjs." >&2
+    exit 1
+  fi
   cat > "${TOOLS_DIR}/pnpm" <<'EOF'
 #!/usr/bin/env bash
-exec node "$(dirname "$0")/package/bin/pnpm.cjs" "$@"
+TOOLS_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec node "${TOOLS_DIR}/package/bin/pnpm.cjs" "$@"
 EOF
   chmod +x "${TOOLS_DIR}/pnpm"
-  echo "pnpm: ${TOOLS_DIR}/pnpm ($("${TOOLS_DIR}/pnpm" -v))"
+  local installed_version
+  installed_version="$("${TOOLS_DIR}/pnpm" -v)"
+  if [[ "${installed_version}" != "${PNPM_VERSION}" ]]; then
+    echo "Expected pnpm ${PNPM_VERSION}, but the project-local launcher reported ${installed_version}." >&2
+    exit 1
+  fi
+  echo "pnpm: ${TOOLS_DIR}/pnpm (${installed_version})"
 }
 
 ensure_uv() {
