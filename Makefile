@@ -24,8 +24,7 @@ bootstrap-tools:
 install: bootstrap-tools
 	@echo "==> Installing JavaScript workspace dependencies"
 	@$(PNPM) install
-	@echo "==> Installing Python API dependencies with uv"
-	@$(UV) sync --directory "$(ROOT_DIR)/apps/api" --extra dev
+	@UV="$(UV)" bash "$(ROOT_DIR)/scripts/sync-api.sh"
 	@echo "==> Building shared TypeScript packages"
 	@$(PNPM) --filter @athanor/contracts build
 	@$(PNPM) --filter @athanor/node-definitions build

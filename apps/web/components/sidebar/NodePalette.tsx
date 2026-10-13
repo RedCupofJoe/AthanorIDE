@@ -100,8 +100,8 @@ const ICONS = {
 
 const CATEGORY_LABELS: Record<string, string> = {
   agents: "Agents & API tools",
-  harnesses: "Harnesses · 5 alternatives",
-  sandboxes: "Sandboxes · 5 alternatives",
+  harnesses: "Harnesses",
+  sandboxes: "Sandboxes",
   mcp: "MCP servers",
   foundation: "Inputs & wiring",
   "fine-tuning": "Fine-tuning",
@@ -136,6 +136,14 @@ export function NodePalette() {
     isAgentStudioType(definition.type) &&
     `${definition.displayName} ${definition.description}`.toLowerCase().includes(query.toLowerCase()),
   );
+
+  const alternativeCount = (category: "harnesses" | "sandboxes") =>
+    listNodeDefinitions().filter(
+      definition =>
+        isAgentStudioType(definition.type) &&
+        definition.category === category &&
+        definition.type !== "sandbox.policy",
+    ).length;
 
   const grouped = definitions.reduce<Record<string, Array<(typeof definitions)[number]>>>(
     (acc, definition) => {
@@ -258,7 +266,9 @@ export function NodePalette() {
         {Object.entries(grouped).map(([category, items]) => (
           <section key={category}>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--athanor-slate)]">
-              {CATEGORY_LABELS[category] ?? category}
+              {category === "harnesses" || category === "sandboxes"
+                ? `${CATEGORY_LABELS[category]} · ${alternativeCount(category)} alternatives`
+                : (CATEGORY_LABELS[category] ?? category)}
             </h3>
             <ul className={cn("space-y-2", compact && "space-y-1.5")}>
               {items.map((definition) => {

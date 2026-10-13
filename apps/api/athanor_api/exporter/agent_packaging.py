@@ -7,6 +7,8 @@ from typing import Any
 
 import yaml
 
+from athanor_api.exporter.sandbox_policy import attached_policies, effective_network
+
 FORMATS = {"code", "helm", "podman", "docker", "openshift", "npm", "makefile"}
 
 
@@ -23,10 +25,22 @@ def references(graph: dict[str, Any]) -> list[str]:
 
 def cluster_files(graph: dict[str, Any], slug: str, fmt: str) -> dict[str, str]:
     nodes = graph["nodes"]
-    sandboxes = [n for n in nodes if n["type"].startswith("sandbox.")]
+    sandboxes = [
+        n for n in nodes if n["type"].startswith("sandbox.") and n["type"] != "sandbox.policy"
+    ]
     if not sandboxes:
         raise ValueError("Connect a sandbox before exporting a cluster deployment.")
-    policies = {(n["type"], json.dumps(n["configuration"], sort_keys=True)) for n in sandboxes}
+    policies = {
+        (
+            n["type"],
+            json.dumps(n["configuration"], sort_keys=True),
+            json.dumps(
+                [item["configuration"] for item in attached_policies(graph, n)],
+                sort_keys=True,
+            ),
+        )
+        for n in sandboxes
+    }
     if len(policies) != 1:
         raise ValueError(
             "Cluster exports share one pod boundary. Use the same sandbox "
@@ -37,7 +51,16 @@ def cluster_files(graph: dict[str, Any], slug: str, fmt: str) -> dict[str, str]:
         raise ValueError(
             "Firecracker needs a platform adapter; select another sandbox for cluster export."
         )
+    if sandbox["type"] == "sandbox.openshell":
+        raise ValueError(
+            "OpenShell runs through its gateway, not as a cluster RuntimeClass. "
+            "Export code and run workflow.py with a selected OpenShell gateway."
+        )
     cfg = sandbox["configuration"]
+    attached = attached_policies(graph, sandbox)
+    if len(attached) > 1:
+        raise ValueError("Connect one Sandbox Policy to each sandbox runtime.")
+    network = effective_network(sandbox, attached[0] if attached else None)
     servers = [n for n in nodes if n["type"] == "mcp.server"]
     agents = [
         n for n in nodes if n["type"] == "agent.sandboxed" or n["type"].startswith("harness.")
@@ -141,7 +164,7 @@ def cluster_files(graph: dict[str, Any], slug: str, fmt: str) -> dict[str, str]:
             "ingress": [{"from": [{"podSelector": {}}], "ports": [{"port": port}]}]
             if is_server
             else [],
-            "egress": [{}] if cfg["network"] == "bridge" else [],
+            "egress": [{}] if network == "bridge" else [],
         }
         docs.append(
             {
@@ -201,6 +224,7 @@ container CPU/memory and network policy apply to the whole workflow. Differing s
 policies are rejected for this target. Use the Python launcher for separate containers
 per agent. Podman/Docker choices map to the cluster OCI runtime; gVisor/Kata require the
 matching installed RuntimeClass. Firecracker is unsupported without a platform adapter.
+OpenShell is unsupported here; use the Python launcher against a selected OpenShell gateway.
 
 A NetworkPolicy-capable CNI is required. Bridge permits all egress; narrow it before
 production. Kubernetes process limits and noexec tmp mounts need node/runtime policy;

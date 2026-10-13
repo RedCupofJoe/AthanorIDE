@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from athanor_api.exporter.agent_packaging import FORMATS, packaging_files, references
+from athanor_api.exporter.sandbox_policy import (
+    attached_policies,
+    openshell_policy_yaml,
+    policy_filename,
+)
 
 RUNTIME_ROOT = Path(__file__).resolve().parent.parent / "templates" / "export" / "agent"
 
@@ -109,6 +114,13 @@ def render_agent_files(
                     "firecracker": "Blueprint only: implement a microVM adapter with isolated "
                     "networking, resource limits, deadline and teardown. Launcher "
                     "refuses execution.",
+                    "openshell": "OpenShell CLI and a selected gateway. The launcher runs "
+                    "openshell sandbox create --from the built image, with --cpu and "
+                    "--memory. Secret values are not passed on the command line; attach "
+                    "providers for names in agent.env.example. Network none relies on "
+                    "OpenShell default-deny; bridge requires a gateway or "
+                    "OPENSHELL_SANDBOX_POLICY that allows the needed egress. Process "
+                    "limits stay with the OpenShell supervisor. Cluster export is rejected.",
                 },
                 "harnessIntegration": "POST configured endpoint with {inputKey: task}; read string "
                 "response[outputKey]. Remote service owns its own isolation and "
@@ -144,6 +156,16 @@ def render_agent_files(
         )
         + "\n"
     )
+    for sandbox in graph["nodes"]:
+        if not sandbox["type"].startswith("sandbox.") or sandbox["type"] == "sandbox.policy":
+            continue
+        policies = attached_policies(graph, sandbox)
+        if len(policies) > 1:
+            raise ValueError("Connect one Sandbox Policy to each sandbox runtime.")
+        if len(policies) == 1:
+            files[policy_filename(sandbox["id"])] = openshell_policy_yaml(
+                policies[0]["configuration"]
+            )
     files["AGENT_README.md"] = """# Agent workflow
 
 This folder includes the graph, editable Python runtime, and an isolated launcher.
@@ -168,6 +190,12 @@ mounts, memory/CPU/process limits, and enforced wall-clock deadlines with cleanu
 No automatic fallback to the host interpreter or another runtime is allowed.
 Containers share the host kernel; gVisor/Kata require preinstalled runtime support.
 Firecracker is a deployment blueprint requiring a platform adapter, not a working VM launcher.
+A Sandbox Policy connected to a runtime overrides that runtime's network mode and
+hardening flags. OpenShell also receives the generated `openshell-policy-*.yaml`.
+OpenShell uses `openshell sandbox create` against the gateway you have selected.
+Build the image first so that gateway can run `--from localhost/athanor-agent:latest`.
+Attach OpenShell providers for credential names; the launcher never puts secret values
+on the command line. Cluster manifests are not generated for OpenShell.
 
 ## MCP server
 
@@ -188,8 +216,10 @@ Resources are static text; prompts substitute a required task argument.
 
 ## Harness adapters and extension
 
-Five endpoint adapters are included: LangGraph, OpenAI Agents SDK, Google ADK,
-PydanticAI, and CrewAI. These are curated alternatives, not a popularity ranking.
+Endpoint adapters are included for LangGraph, OpenAI Agents SDK, Google ADK,
+PydanticAI, CrewAI, and OpenClaw Enterprise. These are curated alternatives, not a
+popularity ranking. OpenClaw Enterprise calls your deployed control-plane endpoint;
+it does not deploy an OCC Agent or generate native OpenClaw configuration.
 They send `{input: task}` and expect `{output: text}` by default; field names are
 configurable. An existing deployed endpoint or a wrapper around the framework is
 required. The selected framework's native SDK is not generated or installed.

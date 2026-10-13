@@ -57,20 +57,18 @@ ensure_uv() {
     echo "uv: ${TOOLS_DIR}/uv ($("${TOOLS_DIR}/uv" --version))"
     return
   fi
-  if ! need_cmd python3; then
-    echo "python3 is required to bootstrap uv." >&2
-    exit 1
-  fi
-  echo "Installing project-local uv into .tools/"
-  python3 -m pip install --target "${TOOLS_DIR}/py" uv >/dev/null
+  local python_bin
+  python_bin="$(bash "${ROOT_DIR}/scripts/resolve-python.sh")"
+  echo "Installing project-local uv into .tools/ with ${python_bin}"
+  "${python_bin}" -m pip install --target "${TOOLS_DIR}/py" uv >/dev/null
   if [[ -x "${TOOLS_DIR}/py/bin/uv" ]]; then
     ln -sfn "${TOOLS_DIR}/py/bin/uv" "${TOOLS_DIR}/uv"
   else
-    cat > "${TOOLS_DIR}/uv" <<'EOF'
+    cat > "${TOOLS_DIR}/uv" <<EOF
 #!/usr/bin/env bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-export PYTHONPATH="${DIR}/py${PYTHONPATH:+:$PYTHONPATH}"
-exec python3 -m uv "$@"
+DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+export PYTHONPATH="\${DIR}/py\${PYTHONPATH:+:\$PYTHONPATH}"
+exec ${python_bin} -m uv "\$@"
 EOF
     chmod +x "${TOOLS_DIR}/uv"
   fi

@@ -4,7 +4,7 @@
     "displayName": "Sandboxed Agent",
     "category": "agents",
     "icon": "bot",
-    "description": "Connect a task, model, tools, and sandbox. Export a bounded tool-using agent without writing code.",
+    "description": "Connect a task, model, tools, sandbox, and optional guardrails. Export a bounded tool-using agent without writing code.",
     "inputs": [
       {
         "name": "task",
@@ -38,6 +38,13 @@
         "name": "mcp",
         "direction": "input",
         "contractType": "MCP_SERVER",
+        "required": false,
+        "multiple": true
+      },
+      {
+        "name": "guardrails",
+        "direction": "input",
+        "contractType": "GUARDRAIL",
         "required": false,
         "multiple": true
       }
@@ -92,7 +99,74 @@
         "type": "number"
       }
     ],
-    "documentation": "Export includes a bounded Chat Completions-compatible model loop, JSON Schema argument validation, tool allowlisting, per-call approval, and container isolation. Run in the IDE previews the plan without calling endpoints. Events contain status and timings, not prompts or credentials.",
+    "documentation": "Export includes a bounded Chat Completions-compatible model loop, JSON Schema argument validation, tool allowlisting, per-call approval, and container isolation. Connect Guardrails to reject phrases and tools in that worker. Run in the IDE previews the plan without calling endpoints. Events contain status and timings, not prompts or credentials.",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "agent.guardrails",
+    "displayName": "Guardrails",
+    "category": "agents",
+    "icon": "badge-check",
+    "description": "Rules the exported agent enforces on the task, tool calls, and result.",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "guardrails",
+        "direction": "output",
+        "contractType": "GUARDRAIL",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "name",
+        "label": "Name",
+        "description": "A unique name when several guardrails connect to one agent.",
+        "defaultValue": "default",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "mode",
+        "label": "Mode",
+        "description": "Block stops the run. Redact replaces matching phrases. Warn records an event and continues. Denied tools are refused in every mode.",
+        "defaultValue": "block",
+        "required": true,
+        "type": "select",
+        "options": [
+          "block",
+          "redact",
+          "warn"
+        ]
+      },
+      {
+        "key": "denyPhrases",
+        "label": "Denied phrases",
+        "description": "One case-insensitive phrase per line. Matched as literal text, not as a regular expression.",
+        "defaultValue": "",
+        "required": false,
+        "type": "text"
+      },
+      {
+        "key": "denyTools",
+        "label": "Denied tools",
+        "description": "Comma-separated tool names the agent must not call.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "key": "maxOutputCharacters",
+        "label": "Maximum result length",
+        "description": "Block, truncate, or warn when the model result exceeds this length.",
+        "defaultValue": 8000,
+        "required": true,
+        "type": "number"
+      }
+    ],
+    "documentation": "The exported worker checks the task before the model call, refuses denied tools and matching tool arguments, and applies the same phrases to tool results and the final answer. Run in the IDE does not call the model, so it does not evaluate these rules. Harness endpoints enforce their own policies.",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -561,7 +635,7 @@
         "advanced": true
       }
     ],
-    "documentation": "Endpoint adapter for LangGraph. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. Five curated alternatives, not a market-share ranking. Documentation: https://docs.langchain.com/oss/python/langgraph/overview",
+    "documentation": "Endpoint adapter for LangGraph. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://docs.langchain.com/oss/python/langgraph/overview",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -646,7 +720,7 @@
         "advanced": true
       }
     ],
-    "documentation": "Endpoint adapter for OpenAI Agents SDK. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. Five curated alternatives, not a market-share ranking. Documentation: https://developers.openai.com/api/docs/guides/agents/sdk",
+    "documentation": "Endpoint adapter for OpenAI Agents SDK. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://developers.openai.com/api/docs/guides/agents/sdk",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -731,7 +805,7 @@
         "advanced": true
       }
     ],
-    "documentation": "Endpoint adapter for Google ADK. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. Five curated alternatives, not a market-share ranking. Documentation: https://adk.dev/",
+    "documentation": "Endpoint adapter for Google ADK. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://adk.dev/",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -816,7 +890,7 @@
         "advanced": true
       }
     ],
-    "documentation": "Endpoint adapter for PydanticAI. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. Five curated alternatives, not a market-share ranking. Documentation: https://ai.pydantic.dev/",
+    "documentation": "Endpoint adapter for PydanticAI. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://ai.pydantic.dev/",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -901,7 +975,166 @@
         "advanced": true
       }
     ],
-    "documentation": "Endpoint adapter for CrewAI. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. Five curated alternatives, not a market-share ranking. Documentation: https://docs.crewai.com/",
+    "documentation": "Endpoint adapter for CrewAI. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://docs.crewai.com/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.openclaw_enterprise",
+    "displayName": "OpenClaw Enterprise Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Deployed OCC agents with embedded or dedicated harness execution",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_POLICY",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for OpenClaw Enterprise. Point the endpoint at a deployed OpenClaw Enterprise control plane. OCC owns execution mode, harness authentication, model probes, and sandbox provisioning. This block does not deploy an Agent or generate native configuration. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://docs-enterprise.openclaw.org/reference/harness-execution/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "sandbox.policy",
+    "displayName": "Sandbox Policy",
+    "category": "sandboxes",
+    "icon": "scroll-text",
+    "description": "Set filesystem, process, and network limits, then connect this policy to a sandbox runtime.",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "policy",
+        "direction": "output",
+        "contractType": "SANDBOX_POLICY",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "network",
+        "label": "Network access",
+        "description": "None blocks endpoint calls. Bridge permits network access. OpenShell still denies egress until allowed endpoints are listed.",
+        "defaultValue": "none",
+        "required": true,
+        "type": "select",
+        "options": [
+          "none",
+          "bridge"
+        ]
+      },
+      {
+        "key": "readOnlyRoot",
+        "label": "Read-only root filesystem",
+        "description": "Keep the worker root filesystem read-only. OpenShell still uses its filesystem policy paths.",
+        "defaultValue": true,
+        "required": true,
+        "type": "boolean"
+      },
+      {
+        "key": "dropCapabilities",
+        "label": "Drop all capabilities",
+        "description": "OCI launches pass --cap-drop=ALL. OpenShell's supervisor enforces its own process policy.",
+        "defaultValue": true,
+        "required": true,
+        "type": "boolean"
+      },
+      {
+        "key": "noNewPrivileges",
+        "label": "Block privilege escalation",
+        "description": "OCI launches pass no-new-privileges. OpenShell rejects privilege escalation in the supervisor.",
+        "defaultValue": true,
+        "required": true,
+        "type": "boolean"
+      },
+      {
+        "key": "runAsUser",
+        "label": "Run as user",
+        "description": "Numeric UID from 1 through 4294967294, or sandbox for OpenShell's named user. OCI launches use UID:UID. The value sandbox maps to 65532:65532 for OCI.",
+        "defaultValue": "65532",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "allowedEndpoints",
+        "label": "Allowed endpoints",
+        "description": "Comma-separated host:port pairs, used when network is bridge. OpenShell allows these TCP destinations for /usr/local/bin/python. OCI runtimes cannot enforce the list.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "documentation": "Connect the policy output to a sandbox runtime's policy input. The runtime still connects to the agent, harness, or MCP server. A connected policy replaces that runtime's network mode. Hardening stays on unless you turn a control off. OpenShell export writes an openshell-policy YAML file and passes it to sandbox create. OCI export maps the same controls onto the container command. Listing endpoints does not create an OCI firewall.",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -911,7 +1144,15 @@
     "category": "sandboxes",
     "icon": "shield",
     "description": "Local OCI containers with no daemon",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "policy",
+        "direction": "input",
+        "contractType": "SANDBOX_POLICY",
+        "required": false,
+        "multiple": false
+      }
+    ],
     "outputs": [
       {
         "name": "sandbox",
@@ -960,7 +1201,7 @@
         "advanced": true
       }
     ],
-    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Export uses the named runtime and fails if unavailable; there is no host execution fallback. https://docs.podman.io/en/latest/markdown/podman-run.1.html",
+    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Connect a Sandbox Policy to override those controls. Export uses the named runtime and fails if unavailable; there is no host execution fallback. https://docs.podman.io/en/latest/markdown/podman-run.1.html",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -970,7 +1211,15 @@
     "category": "sandboxes",
     "icon": "shield",
     "description": "OCI containers; configure a rootless daemon",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "policy",
+        "direction": "input",
+        "contractType": "SANDBOX_POLICY",
+        "required": false,
+        "multiple": false
+      }
+    ],
     "outputs": [
       {
         "name": "sandbox",
@@ -1019,7 +1268,7 @@
         "advanced": true
       }
     ],
-    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Export uses the named runtime and fails if unavailable; there is no host execution fallback. https://docs.docker.com/engine/security/rootless/",
+    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Connect a Sandbox Policy to override those controls. Export uses the named runtime and fails if unavailable; there is no host execution fallback. https://docs.docker.com/engine/security/rootless/",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -1029,7 +1278,15 @@
     "category": "sandboxes",
     "icon": "shield",
     "description": "Docker with the installed runsc runtime",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "policy",
+        "direction": "input",
+        "contractType": "SANDBOX_POLICY",
+        "required": false,
+        "multiple": false
+      }
+    ],
     "outputs": [
       {
         "name": "sandbox",
@@ -1078,7 +1335,7 @@
         "advanced": true
       }
     ],
-    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Export uses the named runtime and fails if unavailable; there is no host execution fallback. https://gvisor.dev/docs/user_guide/quick_start/docker/",
+    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Connect a Sandbox Policy to override those controls. Export uses the named runtime and fails if unavailable; there is no host execution fallback. https://gvisor.dev/docs/user_guide/quick_start/docker/",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -1088,7 +1345,15 @@
     "category": "sandboxes",
     "icon": "shield",
     "description": "VM-backed OCI isolation; install kata-runtime",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "policy",
+        "direction": "input",
+        "contractType": "SANDBOX_POLICY",
+        "required": false,
+        "multiple": false
+      }
+    ],
     "outputs": [
       {
         "name": "sandbox",
@@ -1137,7 +1402,7 @@
         "advanced": true
       }
     ],
-    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Export uses the named runtime and fails if unavailable; there is no host execution fallback. https://katacontainers.io/",
+    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Connect a Sandbox Policy to override those controls. Export uses the named runtime and fails if unavailable; there is no host execution fallback. https://katacontainers.io/",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },
@@ -1147,7 +1412,15 @@
     "category": "sandboxes",
     "icon": "shield",
     "description": "MicroVM deployment blueprint; requires a platform adapter",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "policy",
+        "direction": "input",
+        "contractType": "SANDBOX_POLICY",
+        "required": false,
+        "multiple": false
+      }
+    ],
     "outputs": [
       {
         "name": "sandbox",
@@ -1196,7 +1469,74 @@
         "advanced": true
       }
     ],
-    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Export provides a deployment blueprint; the launcher refuses execution until you implement your Firecracker adapter. No container fallback. https://firecracker-microvm.github.io/",
+    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Connect a Sandbox Policy to override those controls. Export provides a deployment blueprint; the launcher refuses execution until you implement your Firecracker adapter. No container fallback. https://firecracker-microvm.github.io/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "sandbox.openshell",
+    "displayName": "OpenShell",
+    "category": "sandboxes",
+    "icon": "shield",
+    "description": "NVIDIA OpenShell sandbox through a selected gateway",
+    "inputs": [
+      {
+        "name": "policy",
+        "direction": "input",
+        "contractType": "SANDBOX_POLICY",
+        "required": false,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "sandbox",
+        "direction": "output",
+        "contractType": "SANDBOX_POLICY",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "network",
+        "label": "Network access",
+        "description": "None blocks all network. Bridge permits network access; enforce egress restrictions in your infrastructure.",
+        "defaultValue": "none",
+        "required": true,
+        "type": "select",
+        "options": [
+          "none",
+          "bridge"
+        ]
+      },
+      {
+        "key": "memoryMb",
+        "label": "Memory limit (MB)",
+        "description": "Hard container memory limit.",
+        "defaultValue": 512,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "cpus",
+        "label": "CPU limit",
+        "description": "Maximum CPU allocation.",
+        "defaultValue": 1,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "pidsLimit",
+        "label": "Process limit",
+        "description": "Limit the number of processes in the worker.",
+        "defaultValue": 64,
+        "required": true,
+        "type": "number",
+        "advanced": true
+      }
+    ],
+    "documentation": "Read-only root filesystem, non-root user, dropped capabilities, no privilege escalation, no host mounts, and no network by default. Connect a Sandbox Policy to override those controls. Export runs the worker with openshell sandbox create on the selected gateway, passes CPU and memory limits, and deletes the sandbox when the worker exits. Secret values are not placed on the command line; attach OpenShell providers for the names in agent.env.example. Cluster export is unavailable. There is no host execution fallback. https://docs.nvidia.com/openshell/dev/about/overview",
     "version": "1.0.0",
     "exportKind": "agent_studio"
   },

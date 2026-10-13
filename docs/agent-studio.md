@@ -96,6 +96,17 @@ process limits, no host mounts, explicit networking, deadlines, and forced clean
 must be built first. Docker/Podman exports explicitly select their engine for plain OCI
 sandboxes. gVisor and Kata require their installed runtimes; there is no host fallback.
 Firecracker is a blueprint that requires a microVM adapter and refuses execution as-is.
+OpenShell launches the worker with `openshell sandbox create` on the selected gateway.
+A Sandbox Policy block connects to a runtime's policy input and overrides its network
+mode, read-only root, capability, and user settings. OpenShell export writes
+`openshell-policy-*.yaml` and passes that file to `sandbox create`. OCI launches map
+the same controls onto the container command; an endpoint list is not an OCI firewall.
+Credential values stay off the command line; attach OpenShell providers for those names.
+A Guardrails block connects to the agent's guardrails input. The exported worker checks
+the task before the model call, refuses denied tools, and applies the same phrases to
+tool results and the final answer. Block stops the run, redact replaces matches, and
+warn records an event and continues. Run in the IDE does not evaluate these rules.
+Cluster export rejects OpenShell because it is not a Kubernetes RuntimeClass.
 
 Cluster exports use one pod sandbox for the workflow and separate agent processes inside
 it. They reject conflicting sandbox policies. Agents become one-shot Jobs with no retries;
@@ -111,11 +122,12 @@ requires an MCP-aware authorization gateway and explicit host/origin configurati
 
 ## Harness alternatives
 
-The five harness blocks are endpoint adapters for LangGraph, OpenAI Agents SDK, Google
-ADK, PydanticAI, and CrewAI. They POST a configurable task field and read a configurable
-string response field. A deployed harness endpoint or wrapper is required. Native
-framework SDK scaffolds, remote approvals, checkpoints, and isolation are owned by that
-service. These are five curated alternatives, not a claimed popularity ranking.
+The harness blocks are endpoint adapters for LangGraph, OpenAI Agents SDK, Google ADK,
+PydanticAI, CrewAI, and OpenClaw Enterprise. They POST a configurable task field and read
+a configurable string response field. A deployed harness endpoint or wrapper is required.
+Native framework SDK scaffolds, remote approvals, checkpoints, and isolation are owned by
+that service. OpenClaw Enterprise does not deploy an OCC Agent or generate its
+configuration. These are curated alternatives, not a claimed popularity ranking.
 
 Agent exports include `CUSTOM_HARNESS.md`, a versioned JSON request/response contract, and
 a runnable stdlib reference adapter at `app/customer_harness.py`. Replace `run_task` to
