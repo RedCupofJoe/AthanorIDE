@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from athanor_api.schemas.graph import ArchitectureGraph
+from athanor_api.validation.contracts import are_contracts_compatible
 from athanor_api.validation import validate_architecture_graph
 
 
@@ -37,6 +38,13 @@ def test_validate_rejects_incompatible_contracts(contracts_root: Path) -> None:
     issues = validate_architecture_graph(graph)
     codes = {issue.code for issue in issues}
     assert "CONTRACT_INCOMPATIBLE" in codes
+
+
+def test_any_contract_is_only_a_wildcard_for_inputs() -> None:
+    from athanor_api.schemas.graph import ContractType
+
+    assert are_contracts_compatible(ContractType.IMAGE, ContractType.ANY)
+    assert not are_contracts_compatible(ContractType.ANY, ContractType.IMAGE)
 
 
 def test_validate_requires_transform_instruction(contracts_root: Path) -> None:

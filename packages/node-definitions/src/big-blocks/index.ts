@@ -72,7 +72,7 @@ export const graphRagDefinition = block({
   inputs: [
     portTemplate("documents", "input", "STRING", { required: false }),
     portTemplate("corpus", "input", "DATASET", { required: false }),
-    portTemplate("vectorStore", "input", "STRING", { required: false }),
+    portTemplate("vectorStore", "input", "DATABASE_HANDLE", { required: false }),
     portTemplate("query", "input", "STRING"),
   ],
   outputs: [
@@ -111,7 +111,7 @@ export const autoRagDefinition = block({
     portTemplate("corpus", "input", "DATASET", { required: false }),
     portTemplate("documents", "input", "STRING", { required: false, multiple: true }),
     portTemplate("sourceFile", "input", "FILE_REFERENCE", { required: false }),
-    portTemplate("vectorStore", "input", "STRING", { required: false }),
+    portTemplate("vectorStore", "input", "DATABASE_HANDLE", { required: false }),
     portTemplate("query", "input", "STRING"),
   ],
   outputs: [portTemplate("answer", "output", "STRING")],
@@ -188,7 +188,7 @@ export const simpleUiChatbotDefinition = block({
   type: "big_blocks.simple_ui_chatbot",
   displayName: "Simple UI (Chatbot)",
   description:
-    "Simple UI (Chatbot) is an opinionated chat front-end that sits on a local or cloud model runtime. Connect an optional MODEL_HANDLE into model and a PROMPT into system to define runtime and standing instructions. The messages port emits EVENT streams for downstream logging or orchestration, and uiSpec provides optional JSON_SCHEMA for shell layout or tooling integration.",
+    "Simple UI (Chatbot) is an opinionated chat front-end that sits on a local or cloud model runtime. Connect an optional MODEL_HANDLE into model and a PROMPT into system to define runtime and standing instructions. Its prompt output can feed an agent harness; messages emits EVENT streams for downstream logging and uiSpec provides optional JSON_SCHEMA for shell layout. The canvas forbids cycles, so route a harness result to an Output Viewer rather than back into this same UI node.",
   icon: "message-circle",
   inputs: [
     portTemplate("model", "input", "MODEL_HANDLE", { required: false }),
@@ -197,6 +197,7 @@ export const simpleUiChatbotDefinition = block({
     portTemplate("identity", "input", "STRING", { required: false }),
   ],
   outputs: [
+    portTemplate("prompt", "output", "PROMPT"),
     portTemplate("messages", "output", "EVENT"),
     portTemplate("uiSpec", "output", "JSON_SCHEMA", { required: false }),
   ],
@@ -225,13 +226,14 @@ export const simpleUiMultimodalDefinition = block({
   type: "big_blocks.simple_ui_multimodal",
   displayName: "Simple UI Multi-modal",
   description:
-    "Simple UI Multi-modal is an opinionated front-end for mixed media capture with preprocessing hooks for text, image, audio, and optional video. Wire an optional MODEL_HANDLE into model so downstream stacks know which runtime backs the UI. The bundle output carries ANY mixed payloads for RAG or classifiers, and events emits EVENT streams for interaction telemetry or agent loops.",
+    "Simple UI Multi-modal is an opinionated front-end for mixed media capture with preprocessing hooks for text, image, audio, and optional video. Wire its separately typed text, image, audio, and video outputs to compatible downstream nodes; connect an optional MODEL_HANDLE into model. Events emits EVENT streams for interaction telemetry or agent loops.",
   icon: "images",
-  inputs: [
-    portTemplate("model", "input", "MODEL_HANDLE", { required: false }),
-  ],
+  inputs: [portTemplate("model", "input", "MODEL_HANDLE", { required: false })],
   outputs: [
-    portTemplate("bundle", "output", "ANY"),
+    portTemplate("text", "output", "STRING", { required: false }),
+    portTemplate("image", "output", "IMAGE", { required: false }),
+    portTemplate("audio", "output", "AUDIO", { required: false }),
+    portTemplate("video", "output", "VIDEO", { required: false }),
     portTemplate("events", "output", "EVENT"),
   ],
   configurationFields: [
@@ -432,7 +434,7 @@ export const agenticHarnessDefinition = block({
     portTemplate("tools", "input", "TOOL_DEFINITION", { required: false, multiple: true }),
     portTemplate("mcp", "input", "MCP_SERVER", { required: false, multiple: true }),
     portTemplate("model", "input", "MODEL_HANDLE", { required: false }),
-    portTemplate("guardrails", "input", "STRING", { required: false, multiple: true }),
+    portTemplate("guardrails", "input", "GUARDRAIL", { required: false, multiple: true }),
   ],
   outputs: [
     portTemplate("run", "output", "EVENT"),
@@ -487,7 +489,7 @@ export const videoToRagDefinition = block({
   inputs: [
     portTemplate("video", "input", "VIDEO"),
     portTemplate("query", "input", "STRING", { required: false }),
-    portTemplate("vectorStore", "input", "STRING", { required: false }),
+    portTemplate("vectorStore", "input", "DATABASE_HANDLE", { required: false }),
   ],
   outputs: [
     portTemplate("index", "output", "DATASET"),
@@ -526,7 +528,7 @@ export const audioToRagDefinition = block({
     portTemplate("audio", "input", "AUDIO"),
     portTemplate("transcript", "input", "STRING", { required: false, multiple: true }),
     portTemplate("query", "input", "STRING", { required: false }),
-    portTemplate("vectorStore", "input", "STRING", { required: false }),
+    portTemplate("vectorStore", "input", "DATABASE_HANDLE", { required: false }),
   ],
   outputs: [
     portTemplate("index", "output", "DATASET"),
@@ -562,7 +564,7 @@ export const multimodalRagDefinition = block({
   inputs: [
     portTemplate("query", "input", "STRING"),
     portTemplate("text", "input", "STRING", { required: false }),
-    portTemplate("vectorStore", "input", "STRING", { required: false }),
+    portTemplate("vectorStore", "input", "DATABASE_HANDLE", { required: false }),
     portTemplate("image", "input", "IMAGE", { required: false }),
     portTemplate("audio", "input", "AUDIO", { required: false }),
     portTemplate("video", "input", "VIDEO", { required: false }),
@@ -696,7 +698,7 @@ export const postgresPgvectorDefinition = block({
   type: "big_blocks.postgres_pgvector",
   displayName: "PostgreSQL + pgvector",
   description:
-    "PostgreSQL + pgvector is an opinionated relational-plus-vector store for embeddings and structured data in one database. Optionally feed STRING documents (multiple allowed) for ingest lineage and a query for similarity search. Take connection as STRING for downstream clients and optional results STRING when search answers are modeled on the canvas.",
+    "PostgreSQL + pgvector is an opinionated relational-plus-vector store for embeddings and structured data in one database. Optionally feed STRING documents (multiple allowed) for ingest lineage and a query for similarity search. Take connection as a typed DATABASE_HANDLE for downstream retrieval nodes and optional results STRING when search answers are modeled on the canvas.",
   icon: "cylinder",
   inputs: [
     portTemplate("documents", "input", "STRING", { required: false, multiple: true }),
@@ -704,7 +706,7 @@ export const postgresPgvectorDefinition = block({
     portTemplate("query", "input", "STRING", { required: false }),
   ],
   outputs: [
-    portTemplate("connection", "output", "STRING"),
+    portTemplate("connection", "output", "DATABASE_HANDLE"),
     portTemplate("results", "output", "STRING", { required: false }),
   ],
   configurationFields: [
@@ -752,7 +754,7 @@ export const guardrailBuilderDefinition = block({
   type: "big_blocks.guardrail_builder",
   displayName: "Guardrail Builder",
   description:
-    "Guardrail Builder drafts an initial agentic or model guardrail from company policy documents and security best practices. Point it at a hosted policy corpus (URI or connected STRING documents), chunk and embed those docs into a small local vector store sized for a few hundred documents, then call a local or remote generation model via API. Outputs are a guardrailPolicy STRING, a reasoningDocument STRING with cited rationale, optional references JSON_SCHEMA, and an optional index DATASET for the embedded corpus.",
+    "Guardrail Builder drafts an initial agentic or model guardrail from company policy documents and security best practices. Point it at a hosted policy corpus (URI or connected STRING documents), chunk and embed those docs into a small local vector store sized for a few hundred documents, then call a local or remote generation model via API. Outputs a typed GUARDRAIL policy for agent and policy nodes, a STRING reasoning document, optional JSON_SCHEMA references, and an optional DATASET index.",
   icon: "badge-check",
   inputs: [
     portTemplate("policySource", "input", "STRING", { required: false }),
@@ -761,7 +763,7 @@ export const guardrailBuilderDefinition = block({
     portTemplate("credentials", "input", "STRING", { required: false }),
   ],
   outputs: [
-    portTemplate("guardrailPolicy", "output", "STRING"),
+    portTemplate("guardrailPolicy", "output", "GUARDRAIL"),
     portTemplate("reasoningDocument", "output", "STRING"),
     portTemplate("references", "output", "JSON_SCHEMA", { required: false }),
     portTemplate("index", "output", "DATASET", { required: false }),

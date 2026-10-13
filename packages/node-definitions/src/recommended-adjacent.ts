@@ -241,7 +241,7 @@ export const RECOMMENDED_ADJACENT: Readonly<Record<string, RecommendedAdjacent>>
       "foundation.prompt_template",
       "multi_agent.agent",
     ],
-    feedsOut: [],
+    feedsOut: ["big_blocks.agentic_harness"],
   },
   "big_blocks.simple_ui_multimodal": {
     feedsIn: ["big_blocks.model_runtime", "big_blocks.ai_gateway"],

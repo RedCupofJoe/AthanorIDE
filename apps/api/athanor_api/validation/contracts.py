@@ -8,7 +8,9 @@ from athanor_api.schemas.graph import ContractType
 def are_contracts_compatible(source: ContractType, target: ContractType) -> bool:
     if source == target:
         return True
-    if source == ContractType.ANY or target == ContractType.ANY:
+    # ANY is an input-side sink wildcard. An unknown output cannot safely
+    # satisfy a port that promises a specific type.
+    if target == ContractType.ANY:
         return True
     return False
 

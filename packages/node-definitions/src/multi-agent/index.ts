@@ -15,7 +15,7 @@ export const agentDefinition: NodeDefinition = {
     portTemplate("tools", "input", "TOOL_DEFINITION", { required: false, multiple: true }),
     portTemplate("mcp", "input", "MCP_SERVER", { required: false, multiple: true }),
     portTemplate("context", "input", "STRING", { required: false, multiple: true }),
-    portTemplate("guardrails", "input", "STRING", { required: false, multiple: true }),
+    portTemplate("guardrails", "input", "GUARDRAIL", { required: false, multiple: true }),
   ],
   outputs: [
     portTemplate("handle", "output", "MODEL_HANDLE"),

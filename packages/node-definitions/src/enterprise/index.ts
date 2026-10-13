@@ -13,6 +13,7 @@ export const policyGuardrailDefinition: NodeDefinition = {
   inputs: [
     portTemplate("text", "input", "STRING"),
     portTemplate("identityContext", "input", "STRING", { required: false }),
+    portTemplate("guardrail", "input", "GUARDRAIL", { required: false }),
   ],
   outputs: [
     portTemplate("text", "output", "STRING"),
@@ -137,15 +138,15 @@ export const primaryVectorDbsDefinition: NodeDefinition = {
   type: "enterprise.primary_vector_dbs",
   displayName: "Primary DB + Dedicated Vector DB",
   description:
-    "Primary DB + Dedicated Vector DB records an enterprise data topology: a transactional primary (PostgreSQL, MySQL, or MariaDB) paired with a dedicated vector store (Qdrant, Weaviate, or Milvus). Configure endpoints and secret names, then use the primary and vector STRING outputs to show how application services depend on each store.",
+    "Primary DB + Dedicated Vector DB records an enterprise data topology: a transactional primary (PostgreSQL, MySQL, or MariaDB) paired with a dedicated vector store (Qdrant, Weaviate, or Milvus). Configure endpoints and secret names, then connect the typed primary and vector DATABASE_HANDLE outputs to consumers that accept database handles.",
   category: "enterprise",
   version: "1.0.0",
   icon: "boxes",
   exportKind: "enterprise",
   inputs: [],
   outputs: [
-    portTemplate("primary", "output", "STRING"),
-    portTemplate("vector", "output", "STRING"),
+    portTemplate("primary", "output", "DATABASE_HANDLE"),
+    portTemplate("vector", "output", "DATABASE_HANDLE"),
   ],
   configurationFields: [
     {

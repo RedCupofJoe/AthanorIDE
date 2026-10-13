@@ -7,9 +7,10 @@ describe("contract compatibility", () => {
     expect(areContractsCompatible("STRING", "STRING")).toBe(true);
   });
 
-  it("allows ANY on either side", () => {
-    expect(areContractsCompatible("ANY", "IMAGE")).toBe(true);
-    expect(areContractsCompatible("TENSOR", "ANY")).toBe(true);
+  it("allows ANY as an input sink but rejects unknown output into typed inputs", () => {
+    expect(areContractsCompatible("IMAGE", "ANY")).toBe(true);
+    expect(areContractsCompatible("ANY", "ANY")).toBe(true);
+    expect(areContractsCompatible("ANY", "IMAGE")).toBe(false);
   });
 
   it("rejects incompatible types with a correction hint", () => {

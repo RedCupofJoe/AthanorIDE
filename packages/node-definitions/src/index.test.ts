@@ -111,7 +111,7 @@ describe("node definitions catalog", () => {
     });
     expect(guardrail.configuration.systemPromptPosture).toBe("standard");
     expect(guardrail.configuration.vectorStore).toBe("chromadb");
-    expect(guardrail.outputs[0]?.contractType).toBe("STRING");
+    expect(guardrail.outputs[0]?.contractType).toBe("GUARDRAIL");
     expect(guardrail.outputs[1]?.name).toBe("reasoningDocument");
     const dualDb = createNodeFromDefinition("enterprise.primary_vector_dbs", { x: 0, y: 0 });
     expect(dualDb.configuration.primaryDb).toBe("postgresql");
@@ -148,5 +148,32 @@ describe("node definitions catalog", () => {
       expect(node.inputs.every(port => port.direction === "input" && port.contractType)).toBe(true);
       expect(node.outputs.every(port => port.direction === "output" && port.contractType)).toBe(true);
     }
+  });
+
+  it("supports the intended agent, UI, model, guardrail, RAG, and training paths", () => {
+    const port = (type: string, direction: "inputs" | "outputs", name: string) =>
+      getNodeDefinition(type)?.[direction].find(candidate => candidate.name === name);
+    const canConnect = (sourceType: string, sourcePort: string, targetType: string, targetPort: string) => {
+      const source = port(sourceType, "outputs", sourcePort);
+      const target = port(targetType, "inputs", targetPort);
+      return source !== undefined && target !== undefined && areContractsCompatible(source.contractType, target.contractType);
+    };
+
+    expect(canConnect("big_blocks.simple_ui_chatbot", "prompt", "big_blocks.agentic_harness", "goal")).toBe(true);
+    expect(canConnect("big_blocks.model_runtime", "handle", "big_blocks.agentic_harness", "model")).toBe(true);
+    expect(canConnect("big_blocks.model_runtime", "handle", "big_blocks.simple_ui_chatbot", "model")).toBe(true);
+    expect(canConnect("multi_agent.tool_definition", "tool", "big_blocks.agentic_harness", "tools")).toBe(true);
+    expect(canConnect("multi_agent.mcp_server", "server", "big_blocks.agentic_harness", "mcp")).toBe(true);
+    expect(canConnect("big_blocks.guardrail_builder", "guardrailPolicy", "big_blocks.agentic_harness", "guardrails")).toBe(true);
+    expect(canConnect("big_blocks.guardrail_builder", "guardrailPolicy", "enterprise.policy_guardrail", "guardrail")).toBe(true);
+    expect(canConnect("big_blocks.web_to_markdown", "markdown", "big_blocks.autorag", "documents")).toBe(true);
+    expect(canConnect("big_blocks.postgres_pgvector", "connection", "big_blocks.autorag", "vectorStore")).toBe(true);
+    expect(canConnect("enterprise.primary_vector_dbs", "vector", "big_blocks.graphrag", "vectorStore")).toBe(true);
+    expect(canConnect("foundation.text_input", "text", "big_blocks.autorag", "vectorStore")).toBe(false);
+    expect(canConnect("big_blocks.video_chunking_ic_lora", "dataset", "fine_tuning.lora_trainer", "dataset")).toBe(true);
+    expect(canConnect("big_blocks.simple_ui_multimodal", "image", "big_blocks.image_classifier", "image")).toBe(true);
+    expect(canConnect("big_blocks.simple_ui_multimodal", "audio", "big_blocks.voice_to_text", "audio")).toBe(true);
+    expect(canConnect("big_blocks.simple_ui_multimodal", "video", "big_blocks.video_to_rag", "video")).toBe(true);
+    expect(canConnect("big_blocks.simple_ui_multimodal", "image", "big_blocks.voice_to_text", "audio")).toBe(false);
   });
 });

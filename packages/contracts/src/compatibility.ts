@@ -1,17 +1,18 @@
-/** Port contract compatibility: exact match or ANY wildcard (no silent coercion). */
+/** Port contract compatibility: exact match or input-side ANY sink (no silent coercion). */
 import type { ContractType } from "./index.js";
 
 /**
  * Contract compatibility rules.
- * Exact match always works. ANY is a wildcard on either side.
- * Silent coercion is forbidden — use adapter nodes later for conversions.
+ * Exact match always works. ANY is an input-side sink wildcard only: an
+ * unknown output cannot safely satisfy a specifically typed input.
+ * Silent coercion is forbidden — use adapter nodes for conversions.
  */
 export function areContractsCompatible(
   source: ContractType,
   target: ContractType,
 ): boolean {
   if (source === target) return true;
-  if (source === "ANY" || target === "ANY") return true;
+  if (target === "ANY") return true;
   return false;
 }
 
