@@ -30,15 +30,16 @@ The application keeps the **project → palette → canvas → inspector → val
 | Building block | Purpose |
 | --- | --- |
 | Sandboxed Agent | A bounded model/tool loop with connected tools, approvals, and a sandbox policy |
+| Guardrails | Phrase, tool, and result-length checks the exported agent enforces |
 | Model Endpoint | A full Chat Completions-compatible endpoint and its exact model ID |
 | API Tool / Custom API Block | An HTTP endpoint exposed as a tool with JSON Schema arguments |
-| Harness adapters | Call deployed LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, or CrewAI endpoints |
-| Sandbox policies | Rootless Podman, Docker, gVisor, Kata Containers, or a Firecracker blueprint |
+| Harness adapters | Call deployed LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, CrewAI, or OpenClaw Enterprise endpoints |
+| Sandbox policies | Sandbox Policy, plus Rootless Podman, Docker, gVisor, Kata Containers, Firecracker, or OpenShell |
 | MCP Server Builder | Publish connected tools, static text resources, and prompt templates |
 | MCP Connection / MCP Package / Command | Connect selected tools from an HTTP or stdio MCP server |
 | Text Input, JSON Input, Prompt Template, Output Viewer | Supply tasks, format input, and inspect results |
 
-The five harnesses and five sandbox choices are curated alternatives, not a popularity ranking or a claim of industry consensus. Harness blocks call your deployed service; they do not generate native framework applications. Firecracker requires a platform adapter before it can run.
+The harness and sandbox choices are curated alternatives, not a popularity ranking or a claim of industry consensus. Harness blocks call your deployed service; they do not generate native framework applications. OpenClaw Enterprise calls a deployed control-plane endpoint and does not generate OCC configuration. Firecracker requires a platform adapter before it can run. OpenShell runs through a selected gateway.
 
 **Run preview is a design preview for agent/MCP blocks.** It does not call their model endpoints, invoke MCP tools, or launch their workers. Export the workflow to perform real execution. Retained legacy transform blocks have separate execution behavior; see the [API README](apps/api/README.md).
 
@@ -99,7 +100,7 @@ These commands build/start and stop the **IDE's web and API containers** on the 
 
 The stock API image has no nested Podman runtime or persistent vault volume. Use host development for retained transform sandbox execution and configure persistent storage before relying on a containerized vault. Exported agent images are built separately from downloaded archives.
 
-On Linux, rootless Podman is the default local agent option. On macOS, start your Podman machine or Docker engine before running exports. On Windows, use a WSL2 Linux environment for the Bash/Make workflow. gVisor, Kata, and Firecracker need suitable Linux hosts and their own runtime setup.
+On Linux, rootless Podman is the default local agent option. On macOS, start your Podman machine or Docker engine before running exports. On Windows, use a WSL2 Linux environment for the Bash/Make workflow. gVisor, Kata, and Firecracker need suitable Linux hosts and their own runtime setup. OpenShell needs its CLI and a selected gateway.
 
 ## Build your first agent
 
@@ -271,7 +272,7 @@ oc apply -f deploy/openshift/workload.yaml
 
 Read the deployment README in the archive before applying. Agent/harness graphs run as one-shot Jobs with no automatic retries. Server-only graphs produce MCP Deployments and ClusterIP Services. In graphs containing agents and MCP builders, the Job runs the agent graph; it does not separately publish those servers.
 
-Cluster exports use **one pod boundary for the entire workflow**, with deadlines for individual agent processes. All sandbox blocks must use the same type and configuration. Podman/Docker map to the cluster's OCI runtime; gVisor/Kata require installed `gvisor`/`kata` RuntimeClasses. Firecracker exports cannot run without an adapter. Process limits and `noexec` temporary mounts require node/runtime configuration. A NetworkPolicy-capable CNI is required; `bridge` permits all egress until you narrow the policy. No public ingress/Route is generated.
+Cluster exports use **one pod boundary for the entire workflow**, with deadlines for individual agent processes. All sandbox blocks must use the same type and configuration. Podman/Docker map to the cluster's OCI runtime; gVisor/Kata require installed `gvisor`/`kata` RuntimeClasses. Firecracker exports cannot run without an adapter. OpenShell exports cannot be applied as cluster manifests; run them through a selected OpenShell gateway. Process limits and `noexec` temporary mounts require node/runtime configuration. A NetworkPolicy-capable CNI is required; `bridge` permits all egress until you narrow the policy. No public ingress/Route is generated.
 
 ## Runtime boundaries and limitations
 

@@ -316,6 +316,24 @@ def test_sandbox_commands_and_firecracker_fail_closed(runtime):
         assert "--privileged" not in command
     with pytest.raises(RuntimeError, match="No fallback"):
         launcher.sandbox_command(node("sandbox.firecracker"), "test")
+    command = launcher.sandbox_command(node("sandbox.openshell"), "worker")
+    assert command[:3] == ["openshell", "sandbox", "create"]
+    assert command[command.index("--name") + 1] == "worker"
+    assert command[command.index("--from") + 1] == launcher.IMAGE
+    assert command[command.index("--cpu") + 1] == "1"
+    assert command[command.index("--memory") + 1] == "512Mi"
+    assert "--no-keep" in command
+    assert "--no-tty" in command
+    assert "--env" not in command
+    assert command[command.index("--") + 1 :] == ["python", "-m", "app.agent_worker"]
+    forwarded = launcher.openshell_command(
+        node("sandbox.openshell"),
+        "mcp",
+        ["python", "-m", "app.mcp_server", "server"],
+        publish_port=8001,
+    )
+    assert "--no-keep" not in forwarded
+    assert forwarded[forwarded.index("--forward") + 1] == "127.0.0.1:8001"
 
 
 def test_generated_workflow_uses_graph_connections(runtime):
@@ -408,6 +426,104 @@ def test_agent_export_formats(target, artifact):
         assert not {"install", "postinstall", "preinstall"} & package["scripts"].keys()
 
 
+def test_default_sandbox_policy_preserves_oci_hardening(runtime):
+    _, launcher, _ = runtime
+    policy = node("sandbox.policy")
+    assert launcher.sandbox_command(
+        node("sandbox.podman"), "test", policy=policy
+    ) == launcher.sandbox_command(node("sandbox.podman"), "test")
+
+
+def test_sandbox_policy_exports_openshell_document_and_launch_flag(tmp_path):
+    import yaml
+
+    data = graph_dict()
+    policy = node(
+        "sandbox.policy",
+        network="bridge",
+        allowedEndpoints="api.example.com:443",
+    )
+    data["nodes"] = [
+        node("sandbox.openshell", nid="sandbox.podman") if n["type"] == "sandbox.podman" else n
+        for n in data["nodes"]
+    ]
+    data["nodes"].append(policy)
+    data["edges"].append(
+        {
+            "id": "policy-link",
+            "sourceNodeId": policy["id"],
+            "sourcePortId": "out-policy",
+            "targetNodeId": "sandbox.podman",
+            "targetPortId": "in-policy",
+        }
+    )
+    result = export_architecture_graph(ArchitectureGraph.model_validate(data))
+    filename = "openshell-policy-sandbox.podman.yaml"
+    document = yaml.safe_load(result.files[filename])
+    assert document["version"] == 1
+    assert document["process"]["run_as_user"] == "65532"
+    assert document["network_policies"]["workload"]["endpoints"] == [
+        {"host": "api.example.com", "port": 443, "protocol": "tcp"}
+    ]
+    for name, text in result.files.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    launcher = load_module(tmp_path / "workflow.py", "workflow_policy_test")
+    sandbox = next(n for n in data["nodes"] if n["id"] == "sandbox.podman")
+    command = launcher.sandbox_command(sandbox, "worker", policy=policy)
+    assert command[command.index("--policy") + 1] == str(tmp_path / filename)
+    assert "--network" not in command
+    bridged = launcher.sandbox_command(node("sandbox.podman"), "worker", policy=policy)
+    assert bridged[bridged.index("--network") + 1] == "bridge"
+
+
+def test_sandbox_policy_must_connect_to_a_runtime():
+    data = graph_dict()
+    policy = node("sandbox.policy", runAsUser="0")
+    data["nodes"].append(policy)
+    for edge in data["edges"]:
+        if edge["targetPortId"] == "in-sandbox":
+            edge["sourceNodeId"] = policy["id"]
+            edge["sourcePortId"] = "out-policy"
+    issues = validate_architecture_graph(ArchitectureGraph.model_validate(data))
+    assert any(issue.code == "AGENT_UNSUPPORTED_BINDING" for issue in issues)
+    assert any(issue.code == "SANDBOX_POLICY_USER" for issue in issues)
+
+
+def test_sandbox_policy_overrides_cluster_egress():
+    import yaml
+
+    data = graph_dict()
+    policy = node("sandbox.policy", network="bridge", allowedEndpoints="api.example.com:443")
+    data["nodes"].append(policy)
+    data["edges"].append(
+        {
+            "id": "policy-link",
+            "sourceNodeId": policy["id"],
+            "sourcePortId": "out-policy",
+            "targetNodeId": "sandbox.podman",
+            "targetPortId": "in-policy",
+        }
+    )
+    result = export_architecture_graph(
+        ArchitectureGraph.model_validate(data), export_format="openshift"
+    )
+    documents = list(yaml.safe_load_all(result.files["deploy/openshift/workload.yaml"]))
+    network_policy = next(item for item in documents if item["kind"] == "NetworkPolicy")
+    assert network_policy["spec"]["egress"] == [{}]
+
+
+def test_cluster_rejects_openshell():
+    data = graph_dict()
+    data["nodes"] = [
+        node("sandbox.openshell", nid="sandbox.podman") if n["type"] == "sandbox.podman" else n
+        for n in data["nodes"]
+    ]
+    with pytest.raises(ExportError, match="OpenShell"):
+        export_architecture_graph(ArchitectureGraph.model_validate(data), export_format="helm")
+
+
 def test_cluster_rejects_conflicting_policies_and_stdio_servers():
     data = graph_dict()
     data["nodes"].append(node("sandbox.docker"))
@@ -494,3 +610,84 @@ def test_predictive_onnx_path_cannot_escape_models_directory():
     data["nodes"].append(model_node)
     issues = validate_architecture_graph(ArchitectureGraph.model_validate(data))
     assert any(issue.code == "MODEL_PATH_OUTSIDE_IMAGE_MODELS" for issue in issues)
+
+
+def attach_guardrail(data, **config):
+    guard = node("agent.guardrails", "guard", **config)
+    data["nodes"].append(guard)
+    data["edges"].append(
+        {
+            "id": "guard",
+            "sourceNodeId": "guard",
+            "sourcePortId": "out-guardrails",
+            "targetNodeId": "agent.sandboxed",
+            "targetPortId": "in-guardrails",
+        }
+    )
+    return data
+
+
+def test_guardrail_rejects_oversized_phrases_and_bad_tool_names():
+    long_phrase = graph_dict()
+    long_phrase["nodes"].append(node("agent.guardrails", denyPhrases="x" * 201))
+    issues = validate_architecture_graph(ArchitectureGraph.model_validate(long_phrase))
+    assert "GUARDRAIL_PHRASES" in [issue.code for issue in issues]
+    bad_tool = graph_dict()
+    bad_tool["nodes"].append(node("agent.guardrails", denyTools="lookup, bad-name"))
+    issues = validate_architecture_graph(ArchitectureGraph.model_validate(bad_tool))
+    assert "GUARDRAIL_TOOLS" in [issue.code for issue in issues]
+
+
+@pytest.mark.asyncio
+async def test_guardrail_blocks_a_denied_phrase_before_the_model(runtime, monkeypatch):
+    worker, _, _ = runtime
+
+    async def request(*_args, **_kwargs):
+        pytest.fail("model called")
+
+    monkeypatch.setattr(worker, "request_json", request)
+    data = attach_guardrail(graph_dict(), denyPhrases="secret phrase")
+    with pytest.raises(PermissionError, match="Guardrail blocked"):
+        await worker.run_agent(data, data["nodes"][0], "contains secret phrase")
+
+
+@pytest.mark.asyncio
+async def test_guardrail_redacts_output_and_refuses_denied_tools(runtime, monkeypatch):
+    worker, _, _ = runtime
+    data = attach_guardrail(
+        graph_dict(),
+        mode="redact",
+        denyPhrases="secret phrase",
+        denyTools="lookup",
+    )
+
+    async def request(_config, _payload, method="POST"):
+        assert method == "POST"
+        return {"choices": [{"message": {"content": "a secret phrase remains"}}]}
+
+    monkeypatch.setattr(worker, "request_json", request)
+    assert await worker.run_agent(data, data["nodes"][0], "task") == "a [redacted] remains"
+
+    async def tool_request(_config, _payload, method="POST"):
+        assert method == "POST"
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "tool_calls": [
+                            {
+                                "id": "call",
+                                "function": {
+                                    "name": "lookup",
+                                    "arguments": '{"query":"fact"}',
+                                },
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+
+    monkeypatch.setattr(worker, "request_json", tool_request)
+    with pytest.raises(PermissionError, match="Guardrail blocked this tool"):
+        await worker.run_agent(data, data["nodes"][0], "task")

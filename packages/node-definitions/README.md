@@ -8,13 +8,13 @@ Declarative catalog of canvas nodes: ports, configuration fields, documentation,
 
 | Category | Prefix | Blocks |
 | --- | --- | --- |
-| Agents | `agent.*` | Sandboxed Agent, Model Endpoint, API Tool, Custom API Block |
-| Harnesses | `harness.*` | LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, CrewAI endpoint adapters |
-| Sandboxes | `sandbox.*` | Podman, Docker, gVisor, Kata, Firecracker blueprint |
+| Agents | `agent.*` | Sandboxed Agent, Guardrails, Model Endpoint, API Tool, Custom API Block |
+| Harnesses | `harness.*` | LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, CrewAI, OpenClaw Enterprise endpoint adapters |
+| Sandboxes | `sandbox.*` | Sandbox Policy, plus Podman, Docker, gVisor, Kata, Firecracker blueprint, OpenShell |
 | MCP | `mcp.*` | Server Builder, Connection, Package / Command, Resource, Prompt |
 | Foundation | Selected `foundation.*` | Text Input, JSON Input, Prompt Template, Output Viewer |
 
-`NODE_DEFINITIONS` contains both current and retained definitions. The frontend uses `isAgentStudioType` to select its main palette. `HARNESS_OPTIONS` and `SANDBOX_OPTIONS` describe five curated alternatives each; their descriptions must distinguish runnable integrations from endpoint adapters and blueprints.
+`NODE_DEFINITIONS` contains both current and retained definitions. The frontend uses `isAgentStudioType` to select its main palette. `HARNESS_OPTIONS` and `SANDBOX_OPTIONS` describe the curated alternatives; their descriptions must distinguish runnable integrations from endpoint adapters and blueprints.
 
 Read the [agent studio guide](../../docs/agent-studio.md) for current behavior and the [root README](../../README.md) for setup. Saving a configured block as a UI template reuses its existing type; it does not register a new runtime implementation.
 

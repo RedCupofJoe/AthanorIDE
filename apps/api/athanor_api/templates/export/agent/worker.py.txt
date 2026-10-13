@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 from contextlib import AsyncExitStack
@@ -38,6 +39,71 @@ def connected(graph: dict, node: dict, port: str) -> list[dict]:
         for e in graph["edges"]
         if e["targetNodeId"] == node["id"] and e["targetPortId"] in ids
     ]
+
+
+def guardrail_phrases(config: dict) -> list[str]:
+    raw = str(config.get("denyPhrases", ""))
+    return [line.strip() for line in raw.splitlines() if line.strip()]
+
+
+def apply_guardrails(guardrails: list[dict], text: str, *, limit: bool) -> str:
+    for guard in guardrails:
+        if guard.get("type") != "agent.guardrails":
+            continue
+        cfg = guard["configuration"]
+        mode = cfg.get("mode", "block")
+        for phrase in guardrail_phrases(cfg):
+            if phrase.casefold() not in text.casefold():
+                continue
+            if mode == "redact":
+                text = re.sub(
+                    re.escape(phrase), "[redacted]", text, flags=re.IGNORECASE
+                )
+            elif mode == "warn":
+                emit(
+                    {
+                        "kind": "event",
+                        "nodeId": guard["id"],
+                        "event": "guardrail_warn",
+                    }
+                )
+            else:
+                raise PermissionError("Guardrail blocked this content")
+        cap = int(cfg.get("maxOutputCharacters", 8000))
+        if limit and len(text) > cap:
+            if mode == "redact":
+                text = text[:cap]
+            elif mode == "warn":
+                emit(
+                    {
+                        "kind": "event",
+                        "nodeId": guard["id"],
+                        "event": "guardrail_warn",
+                    }
+                )
+            else:
+                raise PermissionError("Guardrail blocked this content")
+    return text
+
+
+def refuse_tool(guardrails: list[dict], name: str, arguments: dict) -> None:
+    preview = json.dumps(arguments)
+    for guard in guardrails:
+        if guard.get("type") != "agent.guardrails":
+            continue
+        cfg = guard["configuration"]
+        denied = {
+            item.strip()
+            for item in str(cfg.get("denyTools", "")).split(",")
+            if item.strip()
+        }
+        phrase_hit = any(
+            phrase.casefold() in preview.casefold() for phrase in guardrail_phrases(cfg)
+        )
+        if name in denied or (phrase_hit and cfg.get("mode") != "warn"):
+            raise PermissionError("Guardrail blocked this tool")
+        if phrase_hit:
+            emit({"kind": "event", "nodeId": guard["id"], "event": "guardrail_warn"})
 
 
 def auth_headers(config: dict) -> dict[str, str]:
@@ -162,6 +228,8 @@ async def call_predictive_model(config: dict, arguments: dict, approval=approve)
 
 async def run_agent(graph: dict, node: dict, task: str, approval=approve) -> str:
     config = node["configuration"]
+    guardrails = connected(graph, node, "guardrails")
+    task = apply_guardrails(guardrails, task, limit=False)
     model = connected(graph, node, "model")[0]["configuration"]
     tools: dict[str, dict] = {}
     callbacks = {}
@@ -281,8 +349,11 @@ async def run_agent(graph: dict, node: dict, task: str, approval=approve) -> str
                 raise ValueError(
                     "Configured MCP tools were not advertised by the server"
                 )
+        instructions = config["instructions"]
+        if guardrails:
+            instructions += "\nConnected guardrails reject denied phrases and tools."
         messages = [
-            {"role": "system", "content": config["instructions"]},
+            {"role": "system", "content": instructions},
             {"role": "user", "content": task},
         ]
         calls = 0
@@ -307,7 +378,7 @@ async def run_agent(graph: dict, node: dict, task: str, approval=approve) -> str
             if not message.get("tool_calls"):
                 if not isinstance(message.get("content"), str):
                     raise ValueError("Model returned no text result")
-                return message["content"]
+                return apply_guardrails(guardrails, message["content"], limit=True)
             messages.append(message)
             for call in message["tool_calls"]:
                 calls += 1
@@ -317,10 +388,12 @@ async def run_agent(graph: dict, node: dict, task: str, approval=approve) -> str
                 if name not in callbacks:
                     raise PermissionError("Model requested an unconnected tool")
                 arguments = json.loads(call["function"]["arguments"])
+                refuse_tool(guardrails, name, arguments)
                 result = await callbacks[name](arguments)
                 text = json.dumps(result)
                 if len(text.encode()) > MAX_RESPONSE_BYTES:
                     raise ValueError("Tool result exceeds 2 MB")
+                text = apply_guardrails(guardrails, text, limit=False)
                 messages.append(
                     {"role": "tool", "tool_call_id": call["id"], "content": text}
                 )

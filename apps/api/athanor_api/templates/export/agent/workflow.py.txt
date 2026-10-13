@@ -30,11 +30,84 @@ def connected(graph, node, port):
     ]
 
 
-def sandbox_command(sandbox, name, *, image=IMAGE):
+def openshell_cpu(value):
+    cpus = float(value)
+    if cpus <= 0:
+        raise ValueError("Unsupported CPU limit")
+    return str(int(cpus)) if cpus.is_integer() else str(cpus)
+
+
+def openshell_policy_filename(sandbox_id):
+    # Keep this in step with athanor_api.exporter.sandbox_policy.policy_filename.
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in sandbox_id) or "sandbox"
+    return f"openshell-policy-{safe}.yaml"
+
+
+def oci_user(value):
+    if value == "sandbox":
+        return "65532:65532"
+    return f"{value}:{value}"
+
+
+def attached_policy(graph, sandbox):
+    found = [
+        node for node in connected(graph, sandbox, "policy") if node["type"] == "sandbox.policy"
+    ]
+    if len(found) > 1:
+        raise ValueError("Connect one Sandbox Policy to each sandbox runtime.")
+    return found[0] if found else None
+
+
+def openshell_command(sandbox, name, argv, *, image=IMAGE, publish_port=None, policy=None):
+    """Launch a worker with the OpenShell CLI. Secret values stay off argv."""
+    cfg = sandbox["configuration"]
+    if cfg["network"] not in {"none", "bridge"}:
+        raise ValueError("Unsupported network mode")
+    memory_mb = int(cfg["memoryMb"])
+    if memory_mb <= 0:
+        raise ValueError("Unsupported memory limit")
+    command = [
+        "openshell",
+        "sandbox",
+        "create",
+        "--name",
+        name,
+        "--from",
+        image,
+        "--cpu",
+        openshell_cpu(cfg["cpus"]),
+        "--memory",
+        f"{memory_mb}Mi",
+        "--no-tty",
+        "--no-auto-providers",
+    ]
+    # --forward keeps the sandbox alive and cannot be combined with --no-keep.
+    if publish_port is None:
+        command.append("--no-keep")
+    else:
+        command += ["--forward", f"127.0.0.1:{int(publish_port)}"]
+    if policy is not None:
+        filename = openshell_policy_filename(sandbox["id"])
+        path = ROOT / filename
+        if not path.is_file():
+            raise RuntimeError(f"Missing {filename}. Re-export the workflow.")
+        command += ["--policy", str(path)]
+    return command + ["--", *argv]
+
+
+def sandbox_command(sandbox, name, *, image=IMAGE, policy=None):
     runtime = sandbox["type"].split(".", 1)[1]
     if runtime == "firecracker":
         raise RuntimeError(
             "Firecracker requires a provisioned microVM adapter. See agent-deployment.json. No fallback is permitted."
+        )
+    if runtime == "openshell":
+        return openshell_command(
+            sandbox,
+            name,
+            ["python", "-m", "app.agent_worker"],
+            image=image,
+            policy=policy,
         )
     engine = {
         "podman": "podman",
@@ -45,23 +118,29 @@ def sandbox_command(sandbox, name, *, image=IMAGE):
     if not engine:
         raise ValueError("Unsupported sandbox")
     cfg = sandbox["configuration"]
-    if cfg["network"] not in {"none", "bridge"}:
+    policy_cfg = None if policy is None else policy["configuration"]
+    network = cfg["network"] if policy_cfg is None else policy_cfg["network"]
+    if network not in {"none", "bridge"}:
         raise ValueError("Unsupported network mode")
-    command = [
-        engine,
-        "run",
-        "--rm",
-        "-i",
-        "--name",
-        name,
-        "--pull=never",
-        "--read-only",
-        "--user",
-        "65532:65532",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
+    command = [engine, "run", "--rm", "-i", "--name", name, "--pull=never"]
+    read_only = True if policy_cfg is None else bool(policy_cfg.get("readOnlyRoot", True))
+    drop_capabilities = (
+        True if policy_cfg is None else bool(policy_cfg.get("dropCapabilities", True))
+    )
+    no_new_privileges = (
+        True if policy_cfg is None else bool(policy_cfg.get("noNewPrivileges", True))
+    )
+    user = "65532:65532" if policy_cfg is None else oci_user(str(policy_cfg.get("runAsUser", "65532")))
+    if read_only:
+        command.append("--read-only")
+    command += ["--user", user]
+    if drop_capabilities:
+        command.append("--cap-drop=ALL")
+    if no_new_privileges:
+        command.append("--security-opt=no-new-privileges")
+    command += [
         "--network",
-        cfg["network"],
+        network,
         "--memory",
         f"{int(cfg['memoryMb'])}m",
         "--memory-swap",
@@ -110,8 +189,7 @@ def dependencies(graph, node):
     return [n for n in graph["nodes"] if n["id"] in found]
 
 
-def credential_args(nodes):
-    args = []
+def credential_names(nodes):
     names = {n["configuration"].get("secretName") for n in nodes} - {None, ""}
     for node in nodes:
         names.update(
@@ -119,14 +197,32 @@ def credential_args(nodes):
             for name in node["configuration"].get("environmentNames", "").split(",")
             if name.strip()
         )
-    for name in sorted(names):
+    return sorted(names)
+
+
+def require_credentials(nodes):
+    for name in credential_names(nodes):
         if name not in os.environ:
             raise RuntimeError(f"Set environment variable {name} before running")
-        args += [
-            "--env",
-            name,
-        ]  # Only names appear in argv; values come from the environment.
-    return args
+
+
+def credential_args(nodes):
+    require_credentials(nodes)
+    # Only names appear in argv; container engines read values from the environment.
+    return [arg for name in credential_names(nodes) for arg in ("--env", name)]
+
+
+def remove_worker(command, name):
+    if command[0] == "openshell":
+        removal = ["openshell", "sandbox", "delete", name]
+    else:
+        removal = [command[0], "rm", "--force", name]
+    subprocess.run(
+        removal,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=15,
+    )
 
 
 def human_approval(event):
@@ -143,10 +239,23 @@ def human_approval(event):
 def run_isolated(graph, node, task, approval=human_approval):
     sandbox = connected(graph, node, "sandbox")[0]
     name = "athanor-" + uuid.uuid4().hex
-    command = sandbox_command(sandbox, name)
-    require_engine(command)
     selected = dependencies(graph, node)
-    command += credential_args(selected) + [IMAGE, "python", "-m", "app.agent_worker"]
+    require_credentials(selected)
+    policy = attached_policy(graph, sandbox)
+    if sandbox["type"] == "sandbox.openshell":
+        names = credential_names(selected)
+        if names:
+            print(
+                "OpenShell does not receive secret values on the command line. "
+                "Attach providers that inject: " + ", ".join(names),
+                file=sys.stderr,
+                flush=True,
+            )
+        command = sandbox_command(sandbox, name, policy=policy)
+    else:
+        command = sandbox_command(sandbox, name, policy=policy)
+        command += credential_args(selected) + [IMAGE, "python", "-m", "app.agent_worker"]
+    require_engine(command)
     process = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
@@ -300,22 +409,29 @@ def serve_mcp(graph, node_id):
     )
     sandbox = connected(graph, node, "sandbox")[0]
     name = "athanor-mcp-" + uuid.uuid4().hex
-    command = sandbox_command(sandbox, name)
+    selected = dependencies(graph, node)
+    require_credentials(selected)
+    policy = attached_policy(graph, sandbox)
+    argv = ["python", "-m", "app.mcp_server", node_id]
+    if sandbox["type"] == "sandbox.openshell":
+        port = (
+            int(node["configuration"]["port"])
+            if node["configuration"]["transport"] == "streamable-http"
+            else None
+        )
+        command = openshell_command(sandbox, name, argv, publish_port=port, policy=policy)
+    else:
+        command = sandbox_command(sandbox, name, policy=policy)
+        command += credential_args(selected)
+        if node["configuration"]["transport"] == "streamable-http":
+            port = int(node["configuration"]["port"])
+            command += ["--publish", f"127.0.0.1:{port}:{port}"]
+        command += [IMAGE, *argv]
     require_engine(command)
-    command += credential_args(dependencies(graph, node))
-    if node["configuration"]["transport"] == "streamable-http":
-        port = int(node["configuration"]["port"])
-        command += ["--publish", f"127.0.0.1:{port}:{port}"]
-    command += [IMAGE, "python", "-m", "app.mcp_server", node_id]
     try:
         subprocess.run(command, check=True)
     finally:
-        subprocess.run(
-            [command[0], "rm", "--force", name],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=15,
-        )
+        remove_worker(command, name)
 
 
 def main():

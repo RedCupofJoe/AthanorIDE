@@ -17,11 +17,15 @@ describe("node definitions catalog", () => {
     expect(types).toContain("big_blocks.ai_gateway");
     expect(types).toContain("big_blocks.agentic_harness");
     expect(types).toContain("big_blocks.video_chunking_ic_lora");
+    expect(types).toContain("harness.openclaw_enterprise");
+    expect(types).toContain("sandbox.openshell");
+    expect(types).toContain("sandbox.policy");
+    expect(types).toContain("agent.guardrails");
     expect(types).toContain("big_blocks.web_to_markdown");
     expect(types).toContain("big_blocks.postgres_pgvector");
     expect(types).toContain("big_blocks.guardrail_builder");
     expect(types).toContain("enterprise.primary_vector_dbs");
-    expect(types).toHaveLength(60);
+    expect(types).toHaveLength(64);
   });
 
   it("creates a text input node with STRING output", () => {

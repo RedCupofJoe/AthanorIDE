@@ -13,6 +13,7 @@ from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 from jsonschema.exceptions import SchemaError  # type: ignore[import-untyped]
 
 from athanor_api.catalog import AGENT_DEFINITIONS_BY_TYPE
+from athanor_api.exporter.sandbox_policy import parse_endpoints, valid_run_as_user
 from athanor_api.schemas.graph import ArchitectureGraph, ValidationIssue
 from athanor_api.secret_scan import text_contains_embedded_secret
 
@@ -117,6 +118,7 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
                     "cpus": 64,
                     "pidsLimit": 4096,
                     "maxTokens": 1000000,
+                    "maxOutputCharacters": 100000,
                 }.get(key, 1000000)
                 valid = valid and value <= ceiling
             else:
@@ -279,7 +281,93 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
                 "Provision a microVM adapter, or choose an installed OCI runtime.",
                 "warning",
             )
-        if node.type.startswith("sandbox.") and cfg.get("network") == "bridge":
+        if node.type == "sandbox.openshell":
+            issue(
+                node.id,
+                "SANDBOX_OPENSHELL_GATEWAY",
+                "OpenShell runs this worker through the selected gateway.",
+                "Install the OpenShell CLI, select a gateway, and attach providers "
+                "for credential names. Cluster export is not available for this sandbox.",
+                "info",
+            )
+        if node.type == "agent.guardrails":
+            phrases = [
+                line.strip()
+                for line in str(cfg.get("denyPhrases", "")).splitlines()
+                if line.strip()
+            ]
+            if len(phrases) > 50 or any(len(phrase) > 200 for phrase in phrases):
+                issue(
+                    node.id,
+                    "GUARDRAIL_PHRASES",
+                    "Use at most 50 denied phrases, each at most 200 characters.",
+                    "Shorten the phrase list.",
+                )
+            tool_names = [
+                name.strip()
+                for name in str(cfg.get("denyTools", "")).split(",")
+                if name.strip()
+            ]
+            if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name) for name in tool_names):
+                issue(
+                    node.id,
+                    "GUARDRAIL_TOOLS",
+                    "Denied tools must be comma-separated tool names.",
+                    "Use names such as lookup or search_docs.",
+                )
+        if node.type == "sandbox.policy":
+            if not valid_run_as_user(str(cfg.get("runAsUser", ""))):
+                issue(
+                    node.id,
+                    "SANDBOX_POLICY_USER",
+                    "Run as user must be a UID from 1 through 4294967294, or sandbox.",
+                    "Use 65532, or sandbox for the OpenShell named user.",
+                )
+            try:
+                endpoints = parse_endpoints(str(cfg.get("allowedEndpoints", "")))
+            except ValueError:
+                endpoints = None
+                issue(
+                    node.id,
+                    "SANDBOX_POLICY_ENDPOINT",
+                    "Allowed endpoints must be comma-separated host:port pairs.",
+                    "Use names such as api.example.com:443. Do not include a scheme or path.",
+                )
+            if cfg.get("network") == "none" and endpoints:
+                issue(
+                    node.id,
+                    "SANDBOX_POLICY_ENDPOINTS_IGNORED",
+                    "Allowed endpoints are ignored while network access is none.",
+                    "Select bridge before relying on the endpoint list.",
+                    "warning",
+                )
+            if cfg.get("network") == "bridge" and endpoints == []:
+                issue(
+                    node.id,
+                    "SANDBOX_POLICY_BRIDGE",
+                    "Bridge with no endpoints enables OCI networking. "
+                    "OpenShell still denies egress.",
+                    "Add host:port pairs for destinations the worker must reach.",
+                    "warning",
+                )
+            if (
+                not cfg.get("readOnlyRoot", True)
+                or not cfg.get("dropCapabilities", True)
+                or not cfg.get("noNewPrivileges", True)
+            ):
+                issue(
+                    node.id,
+                    "SANDBOX_POLICY_WEAKENED",
+                    "This policy turns off a default isolation control.",
+                    "Leave the root filesystem read-only, drop capabilities, "
+                    "and block privilege escalation.",
+                    "warning",
+                )
+        if (
+            node.type.startswith("sandbox.")
+            and node.type != "sandbox.policy"
+            and cfg.get("network") == "bridge"
+        ):
             issue(
                 node.id,
                 "SANDBOX_EGRESS",
@@ -295,12 +383,13 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
             if source:
                 sources.setdefault(port_names.get(edge.target_port_id, ""), []).append(source)
         allowed: dict[str, Callable[[str], bool]] = {
-            "sandbox": lambda t: t.startswith("sandbox."),
+            "sandbox": lambda t: t.startswith("sandbox.") and t != "sandbox.policy",
             "model": lambda t: t == "agent.model",
             "tools": lambda t: t in {"agent.tool", "agent.custom_tool", "model.predictive"},
             "mcp": lambda t: t in {"mcp.client", "mcp.server", "mcp.stdio"},
             "resources": lambda t: t == "mcp.resource",
             "prompts": lambda t: t == "mcp.prompt",
+            "guardrails": lambda t: t == "agent.guardrails",
         }
         for name, predicate in allowed.items():
             if any(not predicate(source.type) for source in sources.get(name, [])):
@@ -310,8 +399,38 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
                     f"The {name} input has an unsupported source block.",
                     "Use a compatible block from the agent library.",
                 )
+        if node.type.startswith("sandbox.") and node.type != "sandbox.policy":
+            policies = sources.get("policy", [])
+            if any(source.type != "sandbox.policy" for source in policies):
+                issue(
+                    node.id,
+                    "AGENT_UNSUPPORTED_BINDING",
+                    "The policy input has an unsupported source block.",
+                    "Connect a Sandbox Policy block.",
+                )
+            if len(policies) > 1:
+                issue(
+                    node.id,
+                    "SANDBOX_POLICY_DUPLICATE",
+                    "Connect one Sandbox Policy to this runtime.",
+                    "Remove the extra policy connection.",
+                )
         for sandbox in sources.get("sandbox", []):
-            if sandbox.configuration.get("network") == "none" and (
+            policy_ports = {port.id for port in sandbox.inputs if port.name == "policy"}
+            attached = [
+                nodes[edge.source_node_id]
+                for edge in graph.edges
+                if edge.target_node_id == sandbox.id
+                and edge.target_port_id in policy_ports
+                and edge.source_node_id in nodes
+                and nodes[edge.source_node_id].type == "sandbox.policy"
+            ]
+            network = (
+                attached[0].configuration.get("network")
+                if attached
+                else sandbox.configuration.get("network")
+            )
+            if network == "none" and (
                 node.type == "agent.sandboxed"
                 or node.type.startswith("harness.")
                 or sources.get("tools")
@@ -323,7 +442,12 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
                     "Select bridge only when ready to allow network access.",
                     "warning",
                 )
-        unique_fields = {"tools": "toolName", "resources": "uri", "prompts": "promptName"}
+        unique_fields = {
+            "tools": "toolName",
+            "resources": "uri",
+            "prompts": "promptName",
+            "guardrails": "name",
+        }
         for port_name, key in unique_fields.items():
             names = [n.configuration.get(key) for n in sources.get(port_name, [])]
             if len(names) != len(set(names)):
