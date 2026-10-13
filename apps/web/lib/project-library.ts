@@ -90,6 +90,38 @@ function summaryFromGraph(graph: ArchitectureGraph): ProjectSummary {
     createdAt: graph.project.createdAt, updatedAt: graph.project.updatedAt };
 }
 
+/** Upgrade port snapshots written before sandbox policies and runtimes had distinct contracts. */
+export function migrateSandboxRuntimePorts(input: unknown): unknown {
+  if (!input || typeof input !== "object" || !Array.isArray((input as { nodes?: unknown }).nodes)) return input;
+  const graph = input as { nodes: Array<{ type?: unknown; inputs?: unknown; outputs?: unknown }> };
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => {
+      const type = typeof node.type === "string" ? node.type : "";
+      const ports = (value: unknown, names: Set<string>) => Array.isArray(value)
+        ? value.map((port) => {
+          if (!port || typeof port !== "object") return port;
+          const record = port as { name?: unknown; contractType?: unknown };
+          return record.name && names.has(String(record.name)) && record.contractType === "SANDBOX_POLICY"
+            ? { ...record, contractType: "SANDBOX_RUNTIME" }
+            : port;
+        })
+        : value;
+      const runtimeOutputs = type.startsWith("sandbox.") && type !== "sandbox.policy"
+        ? new Set(["sandbox"])
+        : new Set<string>();
+      const runtimeInputs = type === "agent.sandboxed" || type.startsWith("harness.") || type === "mcp.server"
+        ? new Set(["sandbox"])
+        : new Set<string>();
+      return {
+        ...node,
+        inputs: ports(node.inputs, runtimeInputs),
+        outputs: ports(node.outputs, runtimeOutputs),
+      };
+    }),
+  };
+}
+
 function upsertSummary(index: ProjectIndex, summary: ProjectSummary): ProjectIndex {
   const entries = [summary, ...index.entries.filter((entry) => entry.id !== summary.id)]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -106,14 +138,14 @@ export async function loadProjectGraph(id: string): Promise<ArchitectureGraph | 
   if (typeof window === "undefined") return null;
   try {
     const stored = await idbRequest<ArchitectureGraph | undefined>("readonly", (store) => store.get(id));
-    if (stored) return parseArchitectureGraph(stored);
+    if (stored) return parseArchitectureGraph(migrateSandboxRuntimePorts(stored));
   } catch {
     // Fall back to legacy storage so browser privacy settings do not make projects disappear.
   }
   try {
     const raw = window.localStorage.getItem(bodyKey(id));
     if (!raw) return null;
-    const graph = parseArchitectureGraph(JSON.parse(raw));
+    const graph = parseArchitectureGraph(migrateSandboxRuntimePorts(JSON.parse(raw)));
     await saveProjectGraph(graph);
     window.localStorage.removeItem(bodyKey(id));
     return graph;

@@ -435,6 +435,7 @@ export const agenticHarnessDefinition = block({
     portTemplate("mcp", "input", "MCP_SERVER", { required: false, multiple: true }),
     portTemplate("model", "input", "MODEL_HANDLE", { required: false }),
     portTemplate("guardrails", "input", "GUARDRAIL", { required: false, multiple: true }),
+    portTemplate("sandbox", "input", "SANDBOX_RUNTIME", { required: false }),
   ],
   outputs: [
     portTemplate("run", "output", "EVENT"),
@@ -459,7 +460,7 @@ export const agenticHarnessDefinition = block({
     {
       key: "harnessRuntime",
       label: "Harness runtime",
-      description: "Where the harness process runs — local-first, hyperscalers opt-in.",
+      description: "Deployment location for the harness process. Use the optional Sandbox Runtime input to attach an explicit isolation runtime; this setting alone does not provide sandbox isolation.",
       type: "select",
       required: true,
       defaultValue: "local",
@@ -477,7 +478,7 @@ export const agenticHarnessDefinition = block({
     ...bigBlockTemplateFields(defaultBigBlockTemplate("agentic_harness", "goose")),
   ],
   documentation:
-    "Use when you need a full tool-using agent rather than a single model call or atomic Agent node. Keep local-first runtimes and opt into Docker, Kubernetes, or hyperscaler targets via URI plus secret name when required. Pair harness selection with a companion OSS framework and override behavior via the bottom template. Big Blocks are lineage and export only — Run does not launch the harness in the IDE.",
+    "Use when you need a full tool-using agent rather than a single model call or atomic Agent node. Connect a Sandbox Runtime when the exported harness should run inside an explicit isolation boundary. The Harness runtime setting selects a deployment location; by itself it does not provide isolation. Keep local-first runtimes and opt into Docker, Kubernetes, or hyperscaler targets via URI plus secret name when required. Pair harness selection with a companion OSS framework and override behavior via the bottom template. Big Blocks are lineage and export only — Run does not launch the harness in the IDE.",
 });
 
 export const videoToRagDefinition = block({

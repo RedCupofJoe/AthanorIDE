@@ -38,6 +38,7 @@ export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
   TOOL_DEFINITION: "Tool definition",
   MCP_SERVER: "MCP server",
   SANDBOX_POLICY: "Sandbox policy",
+  SANDBOX_RUNTIME: "Sandbox runtime",
   GUARDRAIL: "Guardrail",
   MCP_RESOURCE: "MCP resource",
   MCP_PROMPT: "MCP prompt",

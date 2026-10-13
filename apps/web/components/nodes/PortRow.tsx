@@ -17,13 +17,19 @@ import {
   type ConnectionDraft,
 } from "@/store/connection-draft-store";
 
-function portTitle(port: NodePort, direction: "input" | "output"): string {
+export function portTitle(port: NodePort, direction: "input" | "output"): string {
   const label = CONTRACT_TYPE_LABELS[port.contractType];
   const req = port.required ? "Required" : "Optional";
   if (direction === "input") {
-    return `Input “${port.name}” · ${label} · ${req}. Accepts ${label} or Any.`;
+    const accepts = port.contractType === "ANY"
+      ? "Accepts outputs of any contract type."
+      : `Accepts ${label} outputs only. An Any output cannot connect to a typed input.`;
+    return `Input “${port.name}” · ${label} · ${req}. ${accepts}`;
   }
-  return `Output “${port.name}” · ${label} · ${req}. Connect to matching ${label} or Any inputs.`;
+  const connects = port.contractType === "ANY"
+    ? "Connects only to Any inputs; it cannot satisfy a typed input."
+    : `Connect to ${label} inputs or an Any input.`;
+  return `Output “${port.name}” · ${label} · ${req}. ${connects}`;
 }
 
 function compatibilityForPort(
@@ -90,6 +96,15 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
         />
       )}
 
+      <span
+        className={cn(
+          "rounded border px-1 py-0.5 text-[9px] font-bold tracking-wide",
+          isInput ? "border-orange-200 text-[var(--athanor-ember)]" : "border-stone-300 text-[var(--athanor-ink)]",
+        )}
+        aria-hidden="true"
+      >
+        {isInput ? "IN" : "OUT"}
+      </span>
       <span className={cn("font-medium", isInput ? "pl-1" : "pr-1")}>{port.name}</span>
       <span
         className={cn(
@@ -133,8 +148,12 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
         </p>
         <p className="mt-0.5">
           {isInput
-            ? `Connect a ${label} (or Any) output here.`
-            : `Connect this ${label} output to a matching input.`}
+            ? port.contractType === "ANY"
+              ? "Connect any output contract here."
+              : `Connect a ${label} output here. Any outputs do not match this typed input.`
+            : port.contractType === "ANY"
+              ? "Connect this only to an Any input."
+              : `Connect this to a ${label} input or an Any input.`}
         </p>
         {port.required ? (
           <p className="mt-0.5 text-[var(--athanor-ember)]">Required</p>

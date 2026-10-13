@@ -8,6 +8,7 @@ import {
   loadProjectGraph,
   renameProject,
   saveProjectGraph,
+  migrateSandboxRuntimePorts,
 } from "./project-library";
 
 function installMemoryLocalStorage() {
@@ -81,5 +82,20 @@ describe("project library", () => {
     window.localStorage.setItem("athanoride.project.v1", "legacy content");
     expect(listProjectSummaries()).toEqual([]);
     await expect(loadProjectGraph("legacy")).resolves.toBeNull();
+  });
+
+  it("migrates only sandbox runtime ports and preserves policy ports", () => {
+    const oldGraph = {
+      nodes: [
+        { type: "sandbox.podman", inputs: [{ name: "policy", contractType: "SANDBOX_POLICY" }], outputs: [{ name: "sandbox", contractType: "SANDBOX_POLICY" }] },
+        { type: "sandbox.policy", inputs: [], outputs: [{ name: "policy", contractType: "SANDBOX_POLICY" }] },
+        { type: "agent.sandboxed", inputs: [{ name: "sandbox", contractType: "SANDBOX_POLICY" }], outputs: [] },
+      ],
+    };
+    const migrated = migrateSandboxRuntimePorts(oldGraph) as typeof oldGraph;
+    expect(migrated.nodes[0]?.inputs[0]?.contractType).toBe("SANDBOX_POLICY");
+    expect(migrated.nodes[0]?.outputs[0]?.contractType).toBe("SANDBOX_RUNTIME");
+    expect(migrated.nodes[1]?.outputs[0]?.contractType).toBe("SANDBOX_POLICY");
+    expect(migrated.nodes[2]?.inputs[0]?.contractType).toBe("SANDBOX_RUNTIME");
   });
 });

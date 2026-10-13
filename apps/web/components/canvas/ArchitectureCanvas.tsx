@@ -50,6 +50,7 @@ import {
   swimlaneFlowId,
 } from "@/lib/swimlanes";
 import { evaluateConnection } from "@/lib/graph-utils";
+import { CONTRACT_TYPE_LABELS } from "@athanor/contracts";
 import { useConnectionDraftStore } from "@/store/connection-draft-store";
 import { usePendingDeleteStore } from "@/store/pending-delete-store";
 import { useProjectStore } from "@/store/project-store";
@@ -294,7 +295,9 @@ function CanvasInner() {
       const sourcePort = sourceNode?.outputs.find(
         (port) => port.id === edge.sourcePortId,
       );
-      const contractLabel = sourcePort?.contractType ?? "link";
+      const contractLabel = sourcePort
+        ? CONTRACT_TYPE_LABELS[sourcePort.contractType]
+        : "Unresolved contract";
       const payloadLabel =
         payload && lod !== "macro"
           ? payload.value.length > 24
@@ -311,14 +314,11 @@ function CanvasInner() {
         focusable: true,
         interactionWidth: 28,
         selected: isSelected,
-        label:
-          lod === "macro"
-            ? undefined
-            : payloadLabel
-              ? payloadLabel
-              : cross
-                ? "cross-env"
-                : contractLabel,
+        label: lod === "macro"
+          ? undefined
+          : [contractLabel, cross ? "cross-env" : undefined, payloadLabel]
+            .filter(Boolean)
+            .join(" · "),
         animated: cross || Boolean(payload) || isSelected,
         style: {
           stroke: isSelected

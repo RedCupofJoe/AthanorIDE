@@ -17,6 +17,7 @@ export const ContractTypeSchema = z.enum([
   "TOOL_DEFINITION",
   "MCP_SERVER",
   "SANDBOX_POLICY",
+  "SANDBOX_RUNTIME",
   "GUARDRAIL",
   "MCP_RESOURCE",
   "MCP_PROMPT",

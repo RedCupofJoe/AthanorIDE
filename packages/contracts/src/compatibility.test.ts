@@ -5,6 +5,8 @@ import { areContractsCompatible, contractCompatibilityReason } from "./compatibi
 describe("contract compatibility", () => {
   it("allows exact matches", () => {
     expect(areContractsCompatible("STRING", "STRING")).toBe(true);
+    expect(areContractsCompatible("SANDBOX_RUNTIME", "SANDBOX_RUNTIME")).toBe(true);
+    expect(areContractsCompatible("SANDBOX_POLICY", "SANDBOX_RUNTIME")).toBe(false);
   });
 
   it("allows ANY as an input sink but rejects unknown output into typed inputs", () => {
