@@ -100,6 +100,10 @@ These commands build/start and stop the **IDE's web and API containers** on the 
 
 The stock API image has no nested Podman runtime or persistent vault volume. Use host development for retained transform sandbox execution and configure persistent storage before relying on a containerized vault. Exported agent images are built separately from downloaded archives.
 
+### Deploy AthanorIDE itself to OpenShift
+
+The deployment in [deploy/openshift-ide](deploy/openshift-ide/) runs AthanorIDE's web app, API, and OpenShift OAuth proxy sidecar together in a namespace-scoped pod. It is separate from **Export → OpenShift**, which generates manifests for a workflow designed in the IDE. See [the application deployment guide](deploy/openshift-ide/README.md) for image builds, OAuth secret creation, namespace setup, and Route access.
+
 On Linux, rootless Podman is the default local agent option. On macOS, start your Podman machine or Docker engine before running exports. On Windows, use a WSL2 Linux environment for the Bash/Make workflow. gVisor, Kata, and Firecracker need suitable Linux hosts and their own runtime setup. OpenShell needs its CLI and a selected gateway.
 
 ## Build your first agent

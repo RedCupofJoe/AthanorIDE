@@ -33,6 +33,10 @@ CMD ["uvicorn", "athanor_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 FROM node:22-bookworm-slim AS web-build
 
 WORKDIR /repo
+ARG NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+ARG ATHANOR_INTERNAL_API_URL=http://127.0.0.1:8000
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
+    ATHANOR_INTERNAL_API_URL=${ATHANOR_INTERNAL_API_URL}
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 COPY package.json pnpm-workspace.yaml ./
@@ -58,16 +62,24 @@ RUN pnpm --filter @athanor/contracts build \
 FROM node:22-bookworm-slim AS web
 
 WORKDIR /repo
+ARG NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+ARG ATHANOR_INTERNAL_API_URL=http://127.0.0.1:8000
 ENV NODE_ENV=production \
     PORT=3000 \
     NEXT_TELEMETRY_DISABLED=1 \
-    NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+    NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
+    ATHANOR_INTERNAL_API_URL=${ATHANOR_INTERNAL_API_URL}
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 COPY --from=web-build /repo /repo
 
-EXPOSE 3000
+# OpenShift assigns a namespace-specific UID. Keep the Next runtime cache
+# writable by the container's root group without requiring a privileged UID.
+USER root
+RUN chgrp -R 0 /repo/apps/web/.next && chmod -R g=u /repo/apps/web/.next
 USER node
+
+EXPOSE 3000
 WORKDIR /repo
 CMD ["pnpm", "--filter", "@athanor/web", "start"]

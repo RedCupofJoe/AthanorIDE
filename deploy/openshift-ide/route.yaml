@@ -1,0 +1,19 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: athanoride
+  namespace: athanoride
+  labels:
+    app.kubernetes.io/name: athanoride
+    app.kubernetes.io/part-of: athanor-ide
+spec:
+  to:
+    kind: Service
+    name: athanoride
+    weight: 100
+  port:
+    targetPort: https
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: athanoride
+  namespace: athanoride
+  labels:
+    app.kubernetes.io/name: athanoride
+    app.kubernetes.io/part-of: athanor-ide
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: athanoride
+  ports:
+    - name: https
+      port: 443
+      targetPort: proxy
+      protocol: TCP

@@ -1,4 +1,4 @@
-.PHONY: install install-macos bootstrap-tools dev lint typecheck test podman-up podman-down clean help
+.PHONY: install install-macos bootstrap-tools dev lint typecheck test podman-up podman-down openshift-ide-apply clean help
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 TOOLS_DIR := $(ROOT_DIR)/.tools
@@ -17,6 +17,7 @@ help:
 	@echo "  make test          Run frontend and backend tests"
 	@echo "  make podman-up     Start rootless Podman compose stack"
 	@echo "  make podman-down   Stop Podman compose stack"
+	@echo "  make openshift-ide-apply Apply IDE deployment manifests (images and OAuth secret must be prepared)"
 
 bootstrap-tools:
 	@bash "$(ROOT_DIR)/scripts/bootstrap-tools.sh"
@@ -58,6 +59,9 @@ podman-up:
 
 podman-down:
 	@bash "$(ROOT_DIR)/scripts/podman-down.sh"
+
+openshift-ide-apply:
+	@oc apply -k "$(ROOT_DIR)/deploy/openshift-ide"
 
 clean:
 	@rm -rf "$(ROOT_DIR)/apps/web/.next" \
