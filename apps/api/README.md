@@ -45,6 +45,10 @@ Agent graphs use `exporter/agent_studio.py` and `exporter/agent_packaging.py`, w
 
 The response includes `files`, `manifest` (paths, sizes, SHA-256), `archiveBase64`, and validation details. Downloading an export does not build, execute, publish, or deploy it. The archive's README describes its actual runtime requirements. Cluster exports share one pod boundary and reject differing sandbox policies; standalone MCP cluster workloads require Streamable HTTP.
 
+Every deployment export includes `workflow.json`, `build-brief.md`, and deterministic `security-review.json`. Agent exports add `workflow_scheduler.py`, shared by local and cluster entrypoints for bounded concurrency, stage barriers, deterministic joins, recovery substitution, deadlines, and serialized approvals. The server validates the submitted graph again on export; detected embedded credentials block export and findings do not repeat their values.
+
+The design-only handoff endpoint returns a deterministic ZIP containing `workflow.json`, `build-brief.md`, and an importable `project-scaffold.json`. It checks the SME design and credential findings without requiring completed components, and does not invoke an external builder. See the [three-role user guide](../../docs/user-guide.md) and [ADR 0012](../../docs/decisions/0012-three-role-workflow.md).
+
 The API does not resolve credential references into agent exports or automatically inject the local vault into them. The generated launcher reads explicitly named runtime environment variables. MCP registry discovery/import happens in the frontend, not through an API-side package installer.
 
 ## Settings
@@ -87,6 +91,7 @@ After changing agent definitions, run `pnpm catalog:sync` from the repository ro
 
 ## Related docs
 
+- [Three-role user guide](../../docs/user-guide.md) — design/deployment validation, handoff, review, and scheduling
 - [Agent studio guide](../../docs/agent-studio.md) — current agent/MCP behavior
 - [Node authoring guide](../../packages/node-definitions/README.md)
 - [Architecture](../../docs/architecture.md) — retained architecture

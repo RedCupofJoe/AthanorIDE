@@ -17,7 +17,6 @@ ADRs document durable technical decisions for AthanorIDE.
 | [0009](./0009-multi-project-library.md) | Multi-project Local Library | Accepted |
 | [0010](./0010-big-blocks.md) | Big Blocks Opinionated Composites | Accepted |
 | [0011](./0011-local-secrets-vault.md) | Local Secrets Vault | Accepted |
-
 | [0012](./0012-three-role-workflow.md) | Three-role Workflow and Fresh Project Model | Accepted |
 
 ## Template

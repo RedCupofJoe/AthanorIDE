@@ -8,10 +8,33 @@
 
 A local-first graphical workbench for designing sandboxed agents, connecting agent harnesses, and building or importing Model Context Protocol (MCP) servers. Configure endpoints, arguments, credentials by environment variable name, and execution limits through forms; connect blocks on a canvas; export editable code and deployment artifacts.
 
-Three role tabs share one project: **Subject Matter Expert** defines task briefs and stages, **AI Engineer** implements each task inside a matching group, and **AgentOpSec Engineer** reviews controls, instruction overrides, credentials, and unused connections. See the [three-role user guide](docs/user-guide.md). Schema 2.0.0 resets older saved projects once; older graph imports are rejected. Templates, preferences, marketplace caches, and the local vault are preserved.
+**New: three role views, one shared workflow.** Design task briefs, configure their implementations, and review security before exporting. Start with the [three-role user guide](docs/user-guide.md) or see the [change notes](CHANGELOG.md).
+
+## Three-role workflow workspace
+
+| View | What you can do |
+| --- | --- |
+| **Subject Matter Expert** | Draw, resize, color, and clone task boxes. Define each task's role, expected work, and constraints. Connect numbered stages, parallel tasks, and `AN` recovery routes. Export a build brief before implementation is complete. |
+| **AI Engineer** | Implement each SME task inside a matching group using the existing palette and inspector. Assign components, bind string inputs/results, and share models, tools, and security resources across tasks. Inherit the current SME brief or explicitly override instructions. |
+| **AgentOpSec Engineer** | Review highlighted guardrails, sandbox policies, authentication references, suspected embedded credentials, and instruction overrides. Preview and undo pruning of unused optional ports or disconnected group members, then validate for deployment. |
+
+![SME workspace showing three role tabs, two parallel tasks, a stage-2 join, and an A1 recovery route](docs/assets/three-role-workspace.jpg)
+
+*The **Parallel workflow + recovery** starter shows two stage-1 tasks, a stage-2 join, and a dedicated A1 recovery handler.*
+
+- **Staged execution and recovery:** exported workflows run stage peers concurrently (default limit: four), wait at stage barriers, and combine predecessor results deterministically. A successful recovery replaces a task that failed, timed out, or was rejected by a guardrail.
+- **Design-to-build handoff:** download a deterministic ZIP with `workflow.json`, a readable `build-brief.md`, and an importable `project-scaffold.json` for an engineer or external building agent.
+- **Reviewable deployment artifacts:** separate design/deployment validation, location-based credential findings, and server-side export validation. Code, container, Helm, OpenShift, npm, and Makefile exports include the workflow specification and `security-review.json`.
+- **One local project across all views:** autosave, duplication, JSON import/export, undo/redo, remembered role selection, separate SME/engineering viewports, and keyboard-accessible tabs.
+
+All tabs are available to everyone. **Run preview** displays planned stages and recovery routes without executing agents; real execution uses the exported runtime. The build brief is a handoff artifact for an external builder.
+
+**Project format change:** graph schema **2.0.0** starts a fresh project library. The first upgrade removes older saved projects; older graph imports are rejected. New projects survive later loads. Templates, preferences, marketplace caches, and the local vault are preserved. See [storage and backups](#storage-backups-and-credentials).
 
 ## Contents
 
+- [Three-role workflow workspace](#three-role-workflow-workspace)
+- [Change notes](CHANGELOG.md)
 - [What you can build](#what-you-can-build)
 - [Install and start](#install-and-start)
 - [Build your first agent](#build-your-first-agent)
@@ -191,7 +214,7 @@ Choose **Export as** in the editor toolbar, then **Export** to download a ZIP. E
 | npm package | `package.json`, CLI wrapper, and full Python runtime; no install hooks |
 | Makefiles | Build, plan, run, and MCP serve targets alongside the source |
 
-Every agent archive includes `agent-workflow.json`, `agent-deployment.json`, `workflow.py`, `container_entry.py`, `app/`, `requirements-agent.txt`, `Containerfile.agent`, `agent.env.example`, `mcp-client.example.json`, and runtime READMEs. Credential references become variable-name placeholders; the exporter does not fetch values from the vault or your environment.
+Every deployment archive includes `workflow.json`, `build-brief.md`, and a deterministic `security-review.json`. Agent archives also include `agent-workflow.json`, `agent-deployment.json`, `workflow.py`, `workflow_scheduler.py`, `container_entry.py`, `app/`, `requirements-agent.txt`, `Containerfile.agent`, `agent.env.example`, `mcp-client.example.json`, and runtime READMEs. Credential references become variable-name placeholders; the exporter does not fetch values from the vault or your environment.
 
 ### Local source, Podman, Docker, and Makefile exports
 
@@ -204,7 +227,7 @@ make build
 make run
 ```
 
-`make run` uses the saved task inputs. Override text inputs with:
+`make run` uses the saved workflow input. Override it for all root tasks with:
 
 ```bash
 python3 workflow.py run --task "Summarize the available information"
@@ -360,7 +383,7 @@ packages/node-definitions/      Block ports, forms, defaults, and documentation
 packages/ui/                    Shared UI primitives
 scripts/                        Setup, development, containers, catalog synchronization
 docs/                           Current agent guide and architecture/design history
-examples/                       Earlier pipeline examples (not current agent starters)
+examples/                       Starter guide and retained transform walkthrough
 ```
 
 Run these commands from the **IDE repository root**:
@@ -387,19 +410,22 @@ pnpm --filter @athanor/web build
 
 The agent catalog source is [packages/node-definitions/src/agent-studio/index.ts](packages/node-definitions/src/agent-studio/index.ts); its generated API mirror is [agent_catalog.json](apps/api/athanor_api/agent_catalog.json). Update definitions, sync the mirror, and extend validation/runtime support together. UI templates alone do not create new executable node types.
 
-Tests cover graph validation, preview isolation, export artifacts, runtime limits and approval denial, MCP behavior, imports, templates, and canvas mutation integrity. CI runs install, lint, type checking, and tests. Running tests is not a substitute for testing your own provider, MCP package, or target cluster.
+Tests cover schema parity, one-time project reset, task briefs and bindings, instruction inheritance/overrides, pruning and undo, credential detection, deterministic handoff/export artifacts, concurrent stages, recovery, deadlines, and approval serialization. Existing agent/MCP, import, template, and canvas coverage remains. CI runs install, lint, type checking, and tests. Running tests is not a substitute for testing your own provider, MCP package, or target cluster.
 
-Core API routes are `GET /api/v1/health`, `GET /api/v1/node-definitions`, and `POST /api/v1/projects/{validate,execute,export}`. The export request accepts `exportFormat`: `code`, `helm`, `podman`, `docker`, `openshift`, `npm`, or `makefile`, and returns a file map, manifest, and base64 ZIP. Use the running [OpenAPI UI](http://localhost:8000/docs) for full request schemas.
+Core API routes are `GET /api/v1/health`, `GET /api/v1/node-definitions`, and `POST /api/v1/projects/{validate,handoff,execute,export}`. Validation accepts `design` or `deployment` profiles (default: deployment); handoff requires a valid SME design without requiring completed components. The export request accepts `exportFormat`: `code`, `helm`, `podman`, `docker`, `openshift`, `npm`, or `makefile`, and returns a file map, manifest, and base64 ZIP. Use the running [OpenAPI UI](http://localhost:8000/docs) for full request schemas.
 
 ## Documentation
 
 | Reference | Scope |
 | --- | --- |
+| [Three-role user guide](docs/user-guide.md) | SME design, grouped implementation, security review, pruning, and workflow execution |
+| [Change notes](CHANGELOG.md) | New features and the schema-2.0.0 project storage break |
+| [Starter examples](examples/README.md) | Parallel tasks, join/recovery, sandboxed agents, harnesses, and MCP servers |
 | [Agent studio guide](docs/agent-studio.md) | Current agent/MCP behavior, runtime boundaries, and upstream design references |
 | [Frontend README](apps/web/README.md) | Routes, UI components, stores, and frontend development |
 | [API README](apps/api/README.md) | Endpoints, catalog synchronization, preview/export boundaries |
 | [Node authoring guide](packages/node-definitions/README.md) | Adding block definitions and execution support |
 | [Contracts README](packages/contracts/README.md) | Graph schema and shared contract types |
 | [UI package README](packages/ui/README.md) | Shared UI package |
-| [Architecture](docs/architecture.md), [security model](docs/security-model.md), [ADRs](docs/decisions/README.md) | Retained architecture, compiler/vault details, and design history; use the agent guide for current export behavior |
-| [Three-role user guide](docs/user-guide.md), [earlier node catalog](docs/node-catalog.md), [development plan](docs/development-plan.md) | Historical architecture workflow and retained modules; not a complete description of the current palette |
+| [Architecture](docs/architecture.md), [three-role ADR](docs/decisions/0012-three-role-workflow.md), [all ADRs](docs/decisions/README.md) | Project model, workflow execution contracts, and design decisions |
+| [Security model](docs/security-model.md), [earlier node catalog](docs/node-catalog.md), [development plan](docs/development-plan.md) | Retained compiler/vault details and historical modules; use the user and agent guides for current role and export behavior |

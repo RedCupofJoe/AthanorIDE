@@ -7,15 +7,30 @@ No backend database reset is required for browser-local projects.
 
 ## Build a workflow
 
-Start with **Sandboxed agent**. Set the full Chat Completions-compatible model endpoint
-and model ID. Configure each API Tool's method, endpoint, and arguments using the field
-builder. GET encodes arguments as query parameters; other methods send JSON.
+Start with **Sandboxed agent**, or use **Parallel workflow + recovery** to explore stages,
+a join, and a dedicated recovery task. In **Subject Matter Expert**, edit the task briefs
+and transitions. **Export build brief** hands a valid design to an engineer or external
+builder before implementation is complete.
+
+In **AI Engineer**, configure the components in each task's matching group. Set the full
+Chat Completions-compatible model endpoint and model ID. Configure each API Tool's method,
+endpoint, and arguments using the field builder. GET encodes arguments as query parameters;
+other methods send JSON.
 Use a Custom API Block for your own endpoint. Save applied configuration as a template
 and share libraries through Import/Export templates. Exported Python is editable.
 
-Connect task → agent, model → model, sandbox → sandbox, and tool → tools. Connect
-agent result → another agent's task to chain agents, or → Output Viewer. A prompt
-template produces text by replacing `{{input}}` with its connected input.
+Assign executable components to their task and select the group's string input and result
+boundaries. The workflow supplies the input boundary directly; do not wire a separate input
+into that port. Connect model → model, sandbox → sandbox, and tool → tools. Internal wires
+may chain implementation components within a group or connect a result to Output Viewer.
+Use workflow transitions to pass results between tasks. A prompt template produces text by
+replacing `{{input}}` with its connected input.
+
+Agents and harnesses inherit the latest SME brief unless an engineer explicitly overrides
+it. In **AgentOpSec Engineer**, compare effective instructions with the brief, review
+highlighted controls and credential findings, and preview pruning before deployment
+validation. Optional-port and disconnected-component pruning is undoable; task boundaries
+and shared resources are protected. See the [user guide](./user-guide.md) for the full flow.
 
 Set the sandbox network to `bridge` when endpoint access is required. The default
 `none` deliberately denies network. Bridge permits egress; deployment administrators
@@ -86,10 +101,19 @@ server tools deny execution until a trusted host approval integration is supplie
 | npm package | `package.json`, CLI bin, full Python source | `npm pack`; requires Python and container engine |
 | Makefiles | Build, plan, run, serve targets plus code | `make build`; `make serve NODE=…` for MCP |
 
-All archives include the graph, dependency declarations, runtime code, deployment notes,
-and credential-name placeholders. No credentials are emitted. The npm target distributes
+All deployment archives include `workflow.json`, `build-brief.md`, and deterministic
+`security-review.json`, alongside the graph, dependency declarations, runtime code,
+deployment notes, and credential-name placeholders. The server revalidates the submitted
+graph, and detected embedded credentials block export. The npm target distributes
 a CLI wrapper around Python; it does not rewrite the runtime in JavaScript and has no
 install hooks. No export automatically publishes or deploys anything.
+
+Agent exports use the same scheduler for local and cluster entrypoints. Stage peers run
+concurrently up to the configured limit (default four); later stages wait for all peers to
+succeed or recover. Joins combine predecessor results deterministically. Dedicated recovery
+tasks receive original input and sanitized failure information after failure, timeout, or
+guardrail rejection; successful recovery replaces the failed task's result. Interactive
+approvals are serialized. The IDE preview only displays the plan.
 
 The local launcher uses non-root, read-only workers with dropped capabilities, CPU/memory/
 process limits, no host mounts, explicit networking, deadlines, and forced cleanup. Images
