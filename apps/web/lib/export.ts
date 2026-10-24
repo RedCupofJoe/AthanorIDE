@@ -102,3 +102,10 @@ export function downloadExportZip(result: ExportResponse): void {
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+export async function downloadHandoff(graph: ArchitectureGraph): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/projects/handoff`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ graph }) });
+  if (!response.ok) throw new Error("Resolve the SME design and credential findings before exporting a build brief.");
+  const result = z.object({ archiveBase64: z.string() }).parse(await response.json());
+  downloadExportZip({ ...result, projectSlug: "workflow-build-brief", files: {}, manifest: [], durationMs: 0, fileCount: 0, validationIssues: [] });
+}

@@ -6,7 +6,11 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+export type WorkspaceRole = "sme" | "engineer" | "security";
+
 type UiPreferencesState = {
+  workspaceRole: WorkspaceRole;
+  setWorkspaceRole: (role: WorkspaceRole) => void;
   paletteCompact: boolean;
   lowResourceMode: boolean;
   setPaletteCompact: (compact: boolean) => void;
@@ -30,6 +34,8 @@ const memoryStorage = () => {
 export const useUiPreferencesStore = create<UiPreferencesState>()(
   persist(
     (set) => ({
+      workspaceRole: "sme",
+      setWorkspaceRole: (workspaceRole) => set({ workspaceRole }),
       paletteCompact: false,
       lowResourceMode: false,
       setPaletteCompact: (paletteCompact) => set({ paletteCompact }),

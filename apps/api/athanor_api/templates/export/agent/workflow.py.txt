@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from workflow_scheduler import WorkflowExecutionError, run_workflow as schedule_workflow, workflow_plan
+
 import argparse
+import select
 import json
 import os
 from pathlib import Path
@@ -18,6 +21,7 @@ ROOT = Path(__file__).resolve().parent
 GRAPH_PATH = ROOT / "agent-workflow.json"
 IMAGE = os.environ.get("ATHANOR_IMAGE", "localhost/athanor-agent:latest")
 MAX_LINE = 4_000_000
+APPROVAL_LOCK = threading.Lock()
 
 
 def connected(graph, node, port):
@@ -228,12 +232,18 @@ def remove_worker(command, name):
 def human_approval(event):
     if not sys.stdin.isatty():
         return False
-    print(
-        f"Approve tool {event['tool']} with arguments {json.dumps(event['arguments'])}? Type yes:",
-        file=sys.stderr,
-        flush=True,
-    )
-    return sys.stdin.readline().strip() == "yes"
+    deadline = event.get("approvalDeadline", time.monotonic() + 120)
+    remaining = max(0, deadline - time.monotonic())
+    if not APPROVAL_LOCK.acquire(timeout=remaining):
+        return False
+    try:
+        if time.monotonic() >= deadline:
+            return False
+        print(f"Approve tool {event['tool']} with arguments {json.dumps(event['arguments'])}? Type yes:", file=sys.stderr, flush=True)
+        readable, _, _ = select.select([sys.stdin], [], [], max(0, deadline - time.monotonic()))
+        return bool(readable) and sys.stdin.readline().strip() == "yes"
+    finally:
+        APPROVAL_LOCK.release()
 
 
 def run_isolated(graph, node, task, approval=human_approval):
@@ -314,7 +324,7 @@ def run_isolated(graph, node, task, approval=human_approval):
                     events.put(
                         {
                             "kind": "approval_decision",
-                            "approved": bool(approval(request)),
+                            "approved": bool(approval({**request, "approvalDeadline": deadline})),
                         }
                     )
 
@@ -327,21 +337,11 @@ def run_isolated(graph, node, task, approval=human_approval):
             elif event["kind"] == "result":
                 return event["output"]
             elif event["kind"] in {"error", "eof"}:
-                raise RuntimeError(
-                    event.get(
-                        "message",
-                        "Worker exited without a result. Check the built image and runtime.",
-                    )
-                )
+                raise WorkflowExecutionError(event.get("errorCode", "execution_failure"))
     finally:
         # Killing the client alone may leave a container running: remove by unique run name.
         try:
-            subprocess.run(
-                [command[0], "rm", "--force", name],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=15,
-            )
+            remove_worker(command, name)
         finally:
             if process.poll() is None:
                 process.kill()
@@ -351,56 +351,7 @@ def run_isolated(graph, node, task, approval=human_approval):
 
 
 def run_workflow(graph, task_override=None, runner=run_isolated):
-    nodes = {n["id"]: n for n in graph["nodes"]}
-    pending = list(nodes)
-    values = {}
-    results = {}
-    while pending:
-        ready = [
-            nid
-            for nid in pending
-            if all(
-                e["sourceNodeId"] in values
-                for e in graph["edges"]
-                if e["targetNodeId"] == nid
-            )
-        ]
-        if not ready:
-            raise ValueError("Workflow contains a cycle or missing source")
-        for nid in ready:
-            node = nodes[nid]
-            cfg = node["configuration"]
-            inbound = {
-                next(
-                    p["name"] for p in node["inputs"] if p["id"] == e["targetPortId"]
-                ): values[e["sourceNodeId"]]
-                for e in graph["edges"]
-                if e["targetNodeId"] == nid
-            }
-            kind = node["type"]
-            if kind == "foundation.text_input":
-                value = task_override if task_override is not None else cfg["value"]
-            elif kind == "foundation.json_input":
-                value = cfg["json"]
-            elif kind == "foundation.prompt_template":
-                value = cfg["template"].replace(
-                    "{{input}}", str(inbound.get("variables", ""))
-                )
-            elif kind == "foundation.output_viewer":
-                value = inbound.get("text", "")
-                results[nid] = value
-            elif kind == "agent.sandboxed" or kind.startswith("harness."):
-                value = runner(graph, node, str(inbound["task"]))
-                results[nid] = value
-            elif kind.startswith(("sandbox.", "mcp.", "agent.")):
-                value = cfg  # Declaration consumed by its downstream runtime, never host execution.
-            else:
-                raise ValueError(
-                    f"No agent-workflow executor for {kind}; use its legacy export or extend workflow.py"
-                )
-            values[nid] = value
-            pending.remove(nid)
-    return results
+    return schedule_workflow(graph, task_override, runner)
 
 
 def serve_mcp(graph, node_id):
@@ -442,6 +393,7 @@ def main():
     args = parser.parse_args()
     graph = json.loads(GRAPH_PATH.read_text())
     if args.command == "plan":
+        workflow_plan(graph)
         print(
             json.dumps(
                 {
@@ -450,6 +402,7 @@ def main():
                         for n in graph["nodes"]
                     ],
                     "edges": graph["edges"],
+                    "workflow": graph["workflow"],
                 },
                 indent=2,
             )

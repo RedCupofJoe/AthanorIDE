@@ -10,7 +10,7 @@ from athanor_api.schemas.graph import ArchitectureGraph
 
 
 def _base_document(contracts_root: Path) -> dict:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     for node in document["nodes"]:
         if node["type"] == "foundation.python_transform":
@@ -39,7 +39,14 @@ def test_execute_override_text(contracts_root: Path) -> None:
 def test_execute_redacts_secrets() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": {
                 "id": "p1",
                 "name": "Secrets",
@@ -79,7 +86,14 @@ def test_execute_redacts_secrets() -> None:
 def test_execute_portal_bus() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": {
                 "id": "p1",
                 "name": "Portal",

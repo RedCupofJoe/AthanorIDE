@@ -90,7 +90,7 @@ export const AGENT_STUDIO_NODE_DEFINITIONS: readonly NodeDefinition[] = [
   ...HARNESS_OPTIONS.map(option => definition(`harness.${option.id}`, `${option.name} Harness`, "harnesses", "git-fork",
     option.focus, [port("task", "input", "STRING"), port("sandbox", "input", "SANDBOX_RUNTIME")],
     [port("result", "output", "STRING"), port("events", "output", "EVENT")],
-    [field("endpoint", "Deployed harness endpoint", "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.", "https://agents.example.com/run"),
+    [field("instructions", "Engineering instruction override", "Used only when SME instruction override is selected.", "", { required: false, type: "text" }), field("endpoint", "Deployed harness endpoint", "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.", "https://agents.example.com/run"),
       field("inputKey", "Task request field", "Top-level JSON field that receives the connected task.", "input"),
       field("outputKey", "Result response field", "Top-level string field to read from the JSON response.", "output"),
       field("timeoutSeconds", "Run timeout (seconds)", "Bound the request to the deployed harness.", 120), secret()],

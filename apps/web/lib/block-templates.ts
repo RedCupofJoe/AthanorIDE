@@ -24,6 +24,8 @@ export function parseBlockTemplates(raw: string): BlockTemplate[] {
 export function createBlockTemplate(node: ArchitectureNode, name = node.name): BlockTemplate {
   const copy = structuredClone(node);
   delete copy.parentMacroId;
+  delete copy.workflowTaskId;
+  delete copy.instructionMode;
   delete copy.deploymentTarget;
   const provenance = node.metadata?.importedFrom;
   copy.metadata = typeof provenance === "string" ? {
@@ -37,7 +39,7 @@ export function createBlockTemplate(node: ArchitectureNode, name = node.name): B
 export function materializeBlockTemplate(template: BlockTemplate, position: { x: number; y: number }): ArchitectureNode {
   return {
     ...structuredClone(template.node), id: newId(), name: template.name, position,
-    parentMacroId: undefined, deploymentTarget: undefined,
+    parentMacroId: undefined, deploymentTarget: undefined, workflowTaskId: undefined, instructionMode: undefined,
     metadata: { ...template.node.metadata, templateId: template.id, templateName: template.name },
   };
 }

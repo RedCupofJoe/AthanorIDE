@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "2.0.0",
+  "workflow": {
+    "tasks": [
+      {
+        "id": "alpha",
+        "name": "alpha",
+        "color": "#2563eb",
+        "role": "Researcher",
+        "expectedTasks": "Find a fact",
+        "constraints": "Use approved tools",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 300
+        },
+        "engineeringBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 900,
+          "height": 800
+        }
+      },
+      {
+        "id": "beta",
+        "name": "beta",
+        "color": "#7c3aed",
+        "role": "Researcher",
+        "expectedTasks": "Find a fact",
+        "constraints": "Use approved tools",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 300
+        },
+        "engineeringBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 900,
+          "height": 800
+        }
+      },
+      {
+        "id": "join",
+        "name": "join",
+        "color": "#059669",
+        "role": "Researcher",
+        "expectedTasks": "Find a fact",
+        "constraints": "Use approved tools",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 300
+        },
+        "engineeringBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 900,
+          "height": 800
+        }
+      },
+      {
+        "id": "recover",
+        "name": "recover",
+        "color": "#d97706",
+        "role": "Researcher",
+        "expectedTasks": "Find a fact",
+        "constraints": "Use approved tools",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 300
+        },
+        "engineeringBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 900,
+          "height": 800
+        }
+      }
+    ],
+    "transitions": [
+      {
+        "id": "0",
+        "sourceTaskId": null,
+        "targetTaskId": "alpha",
+        "stage": 1,
+        "kind": "normal",
+        "recoveryDescription": ""
+      },
+      {
+        "id": "1",
+        "sourceTaskId": null,
+        "targetTaskId": "beta",
+        "stage": 1,
+        "kind": "normal",
+        "recoveryDescription": ""
+      },
+      {
+        "id": "2",
+        "sourceTaskId": "alpha",
+        "targetTaskId": "join",
+        "stage": 2,
+        "kind": "normal",
+        "recoveryDescription": ""
+      },
+      {
+        "id": "3",
+        "sourceTaskId": "beta",
+        "targetTaskId": "join",
+        "stage": 2,
+        "kind": "normal",
+        "recoveryDescription": ""
+      },
+      {
+        "id": "4",
+        "sourceTaskId": "alpha",
+        "targetTaskId": "recover",
+        "stage": 1,
+        "kind": "recovery",
+        "recoveryDescription": "Recover safely"
+      }
+    ],
+    "input": "find a fact",
+    "maxParallelTasks": 4,
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "project": {
+    "id": "agent-test",
+    "name": "Agent Test",
+    "createdAt": "2026-09-28T00:00:00Z",
+    "updatedAt": "2026-09-28T00:00:00Z"
+  },
+  "nodes": [],
+  "edges": [],
+  "contracts": [],
+  "deploymentEnvironments": [],
+  "macroBlocks": [],
+  "portalBuses": [],
+  "validationResults": [],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  }
+}

@@ -6,7 +6,7 @@ import json
 import re
 import uuid
 from collections import defaultdict, deque
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from athanor_api.catalog import REQUIRED_CONFIG_BY_TYPE
@@ -17,9 +17,10 @@ from athanor_api.schemas.graph import (
     NodePort,
     ValidationIssue,
 )
-from athanor_api.secret_scan import text_contains_embedded_secret
+from athanor_api.secret_scan import redact_embedded_secrets, text_contains_embedded_secret
 from athanor_api.validation.agent_studio import validate_agent_studio
 from athanor_api.validation.contracts import contract_compatibility_reason
+from athanor_api.validation.workflow import effective_graph, security_findings, validate_workflow
 
 PORTAL_TYPES = {"foundation.portal_input", "foundation.portal_output"}
 VALID_PORTAL_SCOPES = {"project", "macro", "deployment"}
@@ -49,13 +50,15 @@ def _issue(
     suggested_action: str | None = None,
 ) -> ValidationIssue:
     return ValidationIssue(
-        id=str(uuid.uuid4()),
+        id=str(
+            uuid.uuid5(uuid.NAMESPACE_URL, json.dumps([severity, code, node_id, edge_id, message]))
+        ),
         severity=severity,  # type: ignore[arg-type]
         code=code,
-        message=message,
+        message=redact_embedded_secrets(message),
         nodeId=node_id,
         edgeId=edge_id,
-        suggestedAction=suggested_action,
+        suggestedAction=redact_embedded_secrets(suggested_action) if suggested_action else None,
     )
 
 
@@ -415,8 +418,13 @@ def _validate_node_specific(node: ArchitectureNode) -> list[ValidationIssue]:
     return issues
 
 
-def validate_architecture_graph(graph: ArchitectureGraph) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
+def validate_architecture_graph(
+    graph: ArchitectureGraph, profile: Literal["design", "deployment"] = "deployment"
+) -> list[ValidationIssue]:
+    issues = validate_workflow(graph, profile) + security_findings(graph)
+    if profile == "design":
+        return issues
+    graph = effective_graph(graph)
     node_ids = [node.id for node in graph.nodes]
     edge_ids = [edge.id for edge in graph.edges]
     nodes_by_id = {node.id: node for node in graph.nodes}
@@ -442,7 +450,9 @@ def validate_architecture_graph(graph: ArchitectureGraph) -> list[ValidationIssu
                         f"Infrastructure token '{slot.label}' secretName looks like an "
                         "embedded token value."
                     ),
-                    suggested_action="Use a short secret name (e.g. HF_TOKEN), not the token itself.",
+                    suggested_action=(
+                        "Use a short secret name such as HF_TOKEN, not the token itself."
+                    ),
                 )
             )
         if text_contains_embedded_secret(slot.secret_name):
@@ -491,6 +501,10 @@ def validate_architecture_graph(graph: ArchitectureGraph) -> list[ValidationIssu
     inbound_counts: dict[tuple[str, str], int] = defaultdict(int)
     for edge in graph.edges:
         inbound_counts[(edge.target_node_id, edge.target_port_id)] += 1
+
+    for task in graph.workflow.tasks:
+        if task.input_binding:
+            inbound_counts[(task.input_binding.node_id, task.input_binding.port_id)] += 1
 
     for node in graph.nodes:
         required_keys = REQUIRED_CONFIG_BY_TYPE.get(node.type)

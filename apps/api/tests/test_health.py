@@ -10,7 +10,7 @@ def test_health_ok(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert payload["schemaVersion"] == "1.0.0"
+    assert payload["schemaVersion"] == "2.0.0"
     assert "X-Correlation-ID" in response.headers
 
 
@@ -30,7 +30,8 @@ def test_node_definitions_empty(client: TestClient) -> None:
     assert "foundation.portal_input" in types
     assert "fine_tuning.lora_trainer" in types
     assert "model.predictive" in types
-    assert len(types) == 60
+    assert len(types) == 64
+    assert len(set(types)) == len(types)
 
 
 @pytest.mark.anyio

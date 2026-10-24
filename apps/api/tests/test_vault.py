@@ -17,7 +17,14 @@ def test_crypto_round_trip() -> None:
     envelope = encrypt_payload(
         "passphrase-ok",
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "entries": [{"id": "ve_1", "name": "HF_TOKEN", "value": "secret-value"}],
         },
     )
@@ -81,7 +88,14 @@ def test_vault_coverage_and_materialize(tmp_path: Path) -> None:
     client.put("/api/v1/vault/entries/HF_TOKEN", json={"value": "hf-value"})
 
     graph = {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "2.0.0",
+        "workflow": {
+            "tasks": [],
+            "transitions": [],
+            "input": "",
+            "maxParallelTasks": 4,
+            "viewport": {"x": 0, "y": 0, "zoom": 1},
+        },
         "project": {
             "id": "p1",
             "name": "Vault",

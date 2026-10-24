@@ -31,6 +31,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
+import { parseTaskFlowId, taskFlowId, securityCategories } from "@/lib/workflow";
 import { architectureNodeTypes } from "@/components/nodes/nodeTypes";
 import type { ArchitectureFlowNodeData } from "@/components/nodes/FoundationNode";
 import type { MacroFlowNodeData } from "@/components/nodes/MacroBlockNode";
@@ -81,6 +82,8 @@ function rejectedConnectionReason(
 
 function CanvasInner() {
   const graph = useProjectStore((state) => state.graph);
+  const securityView = useUiPreferencesStore(s => s.workspaceRole === "security");
+  const moveTaskGroup = useProjectStore(s => s.moveTaskGroup);
   const connectPorts = useProjectStore((state) => state.connectPorts);
   const updateNodePositions = useProjectStore((state) => state.updateNodePositions);
   const reconnectPorts = useProjectStore((state) => state.reconnectPorts);
@@ -214,6 +217,7 @@ function CanvasInner() {
           zIndex: 1,
           data: {
             architectureNode: node,
+            securityTags: securityView ? [...securityCategories(node), ...(issues.some(i => i.nodeId === node.id && i.code === "SECURITY_EMBEDDED_CREDENTIAL") ? ["Possible embedded credential"] : []), ...(issues.some(i => i.nodeId === node.id && i.code === "SECURITY_DISCONNECTED_COMPONENT") ? ["Disconnected component"] : [])] : [],
             lod,
             health: healthByNode.get(node.id) ?? "unknown",
             deploymentLabel: node.deploymentTarget
@@ -245,12 +249,16 @@ function CanvasInner() {
         } satisfies MacroFlowNodeData,
       }));
 
-    return [...swimlaneNodes, ...architectureNodes, ...macroNodes];
+    const groups: Node[] = graph.workflow.tasks.map(task => ({ id: taskFlowId(task.id), type: "workflowTask", position: { x: task.engineeringBounds.x, y: task.engineeringBounds.y }, style: { width: task.engineeringBounds.width, height: task.engineeringBounds.height }, zIndex: -1, selected: selectedNodeIds.includes(taskFlowId(task.id)), data: { task, engineering: true, count: graph.nodes.filter(n => n.workflowTaskId === task.id).length }, dragHandle: ".task-drag-handle" }));
+    return [...swimlaneNodes, ...groups, ...architectureNodes, ...macroNodes];
   }, [
     expandMacro,
     graph.deploymentEnvironments,
     graph.macroBlocks,
     graph.nodes,
+    graph.workflow.tasks,
+    securityView,
+    issues,
     healthByNode,
     laneNameById,
     lod,
@@ -381,6 +389,8 @@ function CanvasInner() {
   useEffect(() => {
     if (!focusNodeId) return;
     const graph = useProjectStore.getState().graph;
+    const task = graph.workflow.tasks.find(t => t.id === parseTaskFlowId(focusNodeId));
+    if (task) { void setCenter(task.engineeringBounds.x + task.engineeringBounds.width / 2, task.engineeringBounds.y + task.engineeringBounds.height / 2, { zoom: 0.65, duration: 250 }); return; }
     const node = graph.nodes.find((item) => item.id === focusNodeId);
     if (!node) return;
     const macroId = collapsedMacroIndexes.hiddenByMacro.get(node.id);
@@ -552,7 +562,10 @@ function CanvasInner() {
 
   const onNodeDragStop: OnNodeDrag = useCallback(
     (_event, _node, nodesSnapshot) => {
+      const movedGroups = new Set(nodesSnapshot.map(n => parseTaskFlowId(n.id)).filter(Boolean));
       for (const item of nodesSnapshot) {
+        const taskId = parseTaskFlowId(item.id);
+        if (taskId) moveTaskGroup(taskId, item.position.x, item.position.y);
         const macroId = parseMacroFlowId(item.id);
         if (macroId) updateMacroPosition(macroId, item.position);
         const laneId = parseSwimlaneFlowId(item.id);
@@ -561,7 +574,7 @@ function CanvasInner() {
       const architectureUpdates = nodesSnapshot
         .filter(
           (item) =>
-            !item.id.startsWith("macro:") && !item.id.startsWith("swimlane:"),
+            !item.id.startsWith("macro:") && !item.id.startsWith("swimlane:") && !parseTaskFlowId(item.id) && !movedGroups.has(graph.nodes.find(n => n.id === item.id)?.workflowTaskId ?? null),
         )
         .map((item) => ({
           id: item.id,
@@ -572,7 +585,7 @@ function CanvasInner() {
         assignNodesToSwimlanes(architectureUpdates.map((item) => item.id));
       }
     },
-    [assignNodesToSwimlanes, updateNodePositions, updateMacroPosition, updateSwimlaneBounds],
+    [assignNodesToSwimlanes, updateNodePositions, updateMacroPosition, updateSwimlaneBounds, moveTaskGroup, graph.nodes],
   );
 
   useEffect(() => {
@@ -678,6 +691,10 @@ function CanvasInner() {
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
         onSelectionChange={onSelectionChange}
+        onNodeClick={(event, node) => {
+          if (node.id.startsWith("swimlane:")) return;
+          setSelection(event.shiftKey ? [...new Set([...useSelectionStore.getState().selectedNodeIds, node.id])] : [node.id]);
+        }}
         onEdgeClick={onEdgeClick}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}

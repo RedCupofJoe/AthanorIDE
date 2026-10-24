@@ -197,9 +197,13 @@ def _execute_node(
 
     if node_type.startswith(("agent.", "harness.", "sandbox.", "mcp.")):
         summary = json.dumps({"preview": True, "block": node.name, "type": node_type})
-        return "skipped", {port.id: summary for port in node.outputs}, (
-            "Design preview only. Export code to run endpoints in the selected sandbox. "
-            "No model, tool, or MCP request was sent."
+        return (
+            "skipped",
+            {port.id: summary for port in node.outputs},
+            (
+                "Design preview only. Export code to run endpoints in the selected sandbox. "
+                "No model, tool, or MCP request was sent."
+            ),
         )
 
     if node_type.startswith("fine_tuning."):
@@ -224,6 +228,34 @@ def execute_architecture_graph(
             status="failed",
             durationMs=round((time.perf_counter() - started) * 1000, 3),
             steps=[],
+            edgePayloads=[],
+            finalOutputs=[],
+            validationIssueCount=len(issues),
+        )
+
+    if graph.workflow.tasks:
+        preview_steps = []
+        for task in graph.workflow.tasks:
+            routes = [e for e in graph.workflow.transitions if e.target_task_id == task.id]
+            labels = sorted({("A" if e.kind == "recovery" else "") + str(e.stage) for e in routes})
+            preview_steps.append(
+                ExecutionStep(
+                    nodeId="workflow-task:" + task.id,
+                    nodeName=task.name,
+                    nodeType="workflow.task",
+                    status="skipped",
+                    message=(
+                        f"Planned stage {', '.join(labels)}. "
+                        "Design preview only; no models or tools called."
+                    ),
+                    inputs={},
+                    outputs={},
+                )
+            )
+        return ExecutionResult(
+            status="partial",
+            durationMs=round((time.perf_counter() - started) * 1000, 3),
+            steps=preview_steps,
             edgePayloads=[],
             finalOutputs=[],
             validationIssueCount=len(issues),

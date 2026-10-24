@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "2.0.0"
 
 
 class ContractType(StrEnum):
@@ -55,6 +55,12 @@ class NodePort(BaseModel):
     schema_: dict[str, Any] | None = Field(default=None, alias="schema")
 
 
+class PrunedPorts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    inputs: list[str]
+    outputs: list[str]
+
+
 class ArchitectureNode(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -69,6 +75,11 @@ class ArchitectureNode(BaseModel):
     outputs: list[NodePort]
     deployment_target: str | None = Field(default=None, alias="deploymentTarget")
     parent_macro_id: str | None = Field(default=None, alias="parentMacroId")
+    workflow_task_id: str | None = Field(default=None, alias="workflowTaskId", min_length=1)
+    instruction_mode: Literal["inherit", "override"] | None = Field(
+        default=None, alias="instructionMode"
+    )
+    pruned_ports: PrunedPorts | None = Field(default=None, alias="prunedPorts")
     metadata: dict[str, Any] | None = None
 
 
@@ -102,6 +113,10 @@ class ValidationIssue(BaseModel):
     message: str
     node_id: str | None = Field(default=None, alias="nodeId")
     edge_id: str | None = Field(default=None, alias="edgeId")
+    task_id: str | None = Field(default=None, alias="taskId")
+    transition_id: str | None = Field(default=None, alias="transitionId")
+    port_id: str | None = Field(default=None, alias="portId")
+    field_path: str | None = Field(default=None, alias="fieldPath")
     suggested_action: str | None = Field(default=None, alias="suggestedAction")
 
 
@@ -111,6 +126,50 @@ class Viewport(BaseModel):
     x: float
     y: float
     zoom: float = Field(gt=0)
+
+
+class WorkflowBounds(Position):
+    width: float = Field(ge=240)
+    height: float = Field(ge=180)
+
+
+class WorkflowBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    node_id: str = Field(alias="nodeId", min_length=1)
+    port_id: str = Field(alias="portId", min_length=1)
+
+
+class WorkflowTask(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    role: str
+    expected_tasks: str = Field(alias="expectedTasks")
+    constraints: str
+    bounds: WorkflowBounds
+    engineering_bounds: WorkflowBounds = Field(alias="engineeringBounds")
+    input_binding: WorkflowBinding | None = Field(default=None, alias="inputBinding")
+    output_binding: WorkflowBinding | None = Field(default=None, alias="outputBinding")
+
+
+class WorkflowTransition(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    id: str = Field(min_length=1)
+    source_task_id: str | None = Field(alias="sourceTaskId", min_length=1)
+    target_task_id: str = Field(alias="targetTaskId", min_length=1)
+    kind: Literal["normal", "recovery"]
+    stage: int = Field(ge=1, strict=True)
+    recovery_description: str = Field(alias="recoveryDescription")
+
+
+class Workflow(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    tasks: list[WorkflowTask]
+    transitions: list[WorkflowTransition]
+    input: str
+    max_parallel_tasks: int = Field(alias="maxParallelTasks", ge=1, le=32, strict=True)
+    viewport: Viewport
 
 
 class DeploymentEnvironmentKind(StrEnum):
@@ -209,14 +268,15 @@ class ExportConfiguration(BaseModel):
 
 
 class ArchitectureGraph(BaseModel):
-    """Canonical architecture graph document (schemaVersion 1.0.0)."""
+    """Canonical architecture graph document (schemaVersion 2.0.0)."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    schema_version: Literal["1.0.0"] = Field(alias="schemaVersion")
+    schema_version: Literal["2.0.0"] = Field(alias="schemaVersion")
     project: ProjectMetadata
     nodes: list[ArchitectureNode]
     edges: list[ArchitectureEdge]
+    workflow: Workflow
     contracts: list[DataContract] = Field(default_factory=list)
     deployment_environments: list[DeploymentEnvironment] = Field(
         default_factory=list, alias="deploymentEnvironments"

@@ -442,6 +442,7 @@ async def main() -> None:
             {
                 "kind": "error",
                 "error": type(exc).__name__,
+                "errorCode": "timeout" if isinstance(exc, TimeoutError) else "guardrail_rejection" if isinstance(exc, PermissionError) else "execution_failure",
                 "message": "Run failed. Check endpoint contracts, permissions, runtime limits, and environment references.",
             }
         )

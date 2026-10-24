@@ -9,10 +9,14 @@ import {
   type ArchitectureEdge,
   type ArchitectureGraph,
   type ArchitectureNode,
+  type WorkflowTask,
   type InfrastructureTokenSlot,
 } from "@athanor/contracts";
-import { createNodeFromDefinition } from "@athanor/node-definitions";
+import { createNodeFromDefinition, getNodeDefinition } from "@athanor/node-definitions";
 import { create } from "zustand";
+import { createWorkflowTask, isExecutable } from "@/lib/workflow";
+import { useExecutionStore } from "./execution-store";
+import { useValidationStore } from "./validation-store";
 import { useSelectionStore } from "./selection-store";
 import { useConnectionDraftStore } from "./connection-draft-store";
 
@@ -39,6 +43,7 @@ const HISTORY_LIMIT = 50;
 const HISTORY_MEMORY_BUDGET_BYTES = 8 * 1024 * 1024;
 
 interface HistorySnapshot {
+  workflow: ArchitectureGraph["workflow"];
   nodes: ArchitectureNode[];
   edges: ArchitectureEdge[];
   macroBlocks: ArchitectureGraph["macroBlocks"];
@@ -49,6 +54,13 @@ interface HistorySnapshot {
 }
 
 interface ProjectStore {
+  mutateGraph: (change: (graph: ArchitectureGraph) => ArchitectureGraph, recordHistory?: boolean) => void;
+  addTask: (bounds?: Partial<WorkflowTask["bounds"]>) => string;
+  updateTask: (id: string, patch: Partial<WorkflowTask>) => void;
+  cloneTask: (id: string) => void;
+  removeTask: (id: string) => void;
+  assignTask: (nodeIds: string[], taskId?: string) => void;
+  moveTaskGroup: (id: string, x: number, y: number) => void;
   graph: ArchitectureGraph;
   past: HistorySnapshot[];
   future: HistorySnapshot[];
@@ -104,9 +116,11 @@ interface ProjectStore {
   assignNodesToSwimlanes: (nodeIds: string[]) => void;
 }
 
-function touch(graph: ArchitectureGraph): ArchitectureGraph {
+function touch(graph: ArchitectureGraph, invalidate = true): ArchitectureGraph {
+  if (invalidate) useValidationStore.getState().clear();
   return {
     ...graph,
+    validationResults: invalidate ? [] : graph.validationResults,
     project: {
       ...graph.project,
       updatedAt: new Date().toISOString(),
@@ -135,6 +149,7 @@ function ensureInfrastructureTokens(graph: ArchitectureGraph): ArchitectureGraph
 
 function snapshotOf(graph: ArchitectureGraph): HistorySnapshot {
   return {
+    workflow: structuredClone(graph.workflow),
     nodes: structuredClone(graph.nodes),
     edges: structuredClone(graph.edges),
     macroBlocks: structuredClone(graph.macroBlocks),
@@ -151,6 +166,7 @@ function applySnapshot(
 ): ArchitectureGraph {
   return touch({
     ...graph,
+    workflow: snapshot.workflow,
     nodes: snapshot.nodes,
     edges: snapshot.edges,
     macroBlocks: snapshot.macroBlocks,
@@ -194,7 +210,56 @@ function pruneMacros(
     .filter((macro) => macro.nodeIds.length > 0);
 }
 
+let hydrationRequest = 0;
+
 export const useProjectStore = create<ProjectStore>((set, get) => ({
+  mutateGraph: (change, recordHistory = true) => set(state => {
+    const next = change(state.graph);
+    if (next === state.graph) return state;
+    const history = recordHistory ? pushHistory(state) : {};
+    const graph = touch(next, recordHistory);
+    schedulePersist(graph);
+    return { ...history, graph };
+  }),
+  addTask: (bounds) => {
+    const task = createWorkflowTask(get().graph.workflow.tasks.length);
+    if (bounds) task.bounds = { ...task.bounds, ...bounds };
+    get().mutateGraph(graph => ({ ...graph, workflow: { ...graph.workflow, tasks: [...graph.workflow.tasks, task] } }));
+    return task.id;
+  },
+  updateTask: (id, patch) => get().mutateGraph(graph => ({ ...graph, workflow: { ...graph.workflow, tasks: graph.workflow.tasks.map(t => t.id === id ? { ...t, ...patch, id: t.id } : t) } })),
+  cloneTask: (id) => {
+    const task = get().graph.workflow.tasks.find(t => t.id === id);
+    if (!task) return;
+    const clone = { ...structuredClone(task), id: newId(), name: `${task.name} copy`, inputBinding: undefined, outputBinding: undefined, bounds: { ...task.bounds, x: task.bounds.x + 60, y: task.bounds.y + 60 }, engineeringBounds: { ...task.engineeringBounds, x: task.engineeringBounds.x + task.engineeringBounds.width + 80 } };
+    get().mutateGraph(graph => ({ ...graph, workflow: { ...graph.workflow, tasks: [...graph.workflow.tasks, clone] } }));
+  },
+  removeTask: (id) => get().mutateGraph(graph => ({ ...graph,
+    nodes: graph.nodes.map(n => n.workflowTaskId === id ? { ...n, workflowTaskId: undefined, instructionMode: undefined } : n),
+    workflow: { ...graph.workflow, tasks: graph.workflow.tasks.filter(t => t.id !== id), transitions: graph.workflow.transitions.filter(t => t.sourceTaskId !== id && t.targetTaskId !== id) },
+  })),
+  assignTask: (nodeIds, taskId) => get().mutateGraph(graph => ({ ...graph,
+    workflow: { ...graph.workflow, tasks: graph.workflow.tasks.map(t => ({ ...t,
+      inputBinding: t.inputBinding && nodeIds.includes(t.inputBinding.nodeId) && t.id !== taskId ? undefined : t.inputBinding,
+      outputBinding: t.outputBinding && nodeIds.includes(t.outputBinding.nodeId) && t.id !== taskId ? undefined : t.outputBinding,
+    })) },
+    nodes: graph.nodes.map(n => {
+      if (!nodeIds.includes(n.id)) return n;
+      const defaultInstructions = getNodeDefinition(n.type)?.configurationFields.find(f => f.key === "instructions")?.defaultValue;
+      const custom = n.configuration.instructions && n.configuration.instructions !== defaultInstructions;
+      return { ...n, workflowTaskId: taskId, instructionMode: taskId && isExecutable(n.type) ? n.instructionMode ?? (custom ? "override" as const : "inherit" as const) : undefined };
+    }),
+  })),
+  moveTaskGroup: (id, x, y) => {
+    const task = get().graph.workflow.tasks.find(t => t.id === id);
+    if (!task) return;
+    const dx = x - task.engineeringBounds.x, dy = y - task.engineeringBounds.y;
+    get().mutateGraph(graph => ({ ...graph,
+      workflow: { ...graph.workflow, tasks: graph.workflow.tasks.map(t => t.id === id ? { ...t, engineeringBounds: { ...t.engineeringBounds, x, y } } : t) },
+      nodes: graph.nodes.map(n => n.workflowTaskId === id ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n),
+      macroBlocks: graph.macroBlocks.map(m => m.nodeIds.length && m.nodeIds.every(nid => graph.nodes.some(n => n.id === nid && n.workflowTaskId === id)) ? { ...m, metadata: { ...m.metadata, position: { x: Number((m.metadata?.position as { x: number } | undefined)?.x ?? 0) + dx, y: Number((m.metadata?.position as { y: number } | undefined)?.y ?? 0) + dy } } } : m),
+    }), false);
+  },
   graph: createEmptyGraph("Agent Workspace"),
   past: [],
   future: [],
@@ -203,9 +268,15 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   hydrated: false,
 
   hydrate: async (projectId) => {
+    const request = ++hydrationRequest;
+    set({ hydrated: false });
+    useSelectionStore.getState().clearSelection();
+    useValidationStore.getState().clear();
+    useExecutionStore.getState().clear();
     const targetId = projectId ?? getActiveProjectId() ?? undefined;
     if (targetId) {
       const loaded = await loadProjectGraph(targetId);
+      if (request !== hydrationRequest) return false;
       if (loaded) {
         setActiveProjectId(loaded.project.id);
         set({
@@ -224,6 +295,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
 
     const persisted = await loadPersistedGraph();
+    if (request !== hydrationRequest) return false;
     if (persisted) {
       setActiveProjectId(persisted.project.id);
       set({
@@ -465,6 +537,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
               !nodeSet.has(edge.targetNodeId),
           ),
           macroBlocks: pruneMacros(state.graph.macroBlocks, remainingIds),
+          workflow: { ...state.graph.workflow, tasks: state.graph.workflow.tasks.map(t => ({ ...t, inputBinding: t.inputBinding && nodeSet.has(t.inputBinding.nodeId) ? undefined : t.inputBinding, outputBinding: t.outputBinding && nodeSet.has(t.outputBinding.nodeId) ? undefined : t.outputBinding })) },
         }),
       );
       schedulePersist(graph);

@@ -55,6 +55,7 @@ import { isPortalNode, portalBusId } from "@/lib/portals";
 
 export type ArchitectureFlowNodeData = {
   architectureNode: ArchitectureNode;
+  securityTags?: string[];
   lod: LodLevel;
   health: "ok" | "warning" | "error" | "unknown";
   deploymentLabel?: string;
@@ -127,6 +128,7 @@ function FoundationNodeComponent({ id, data, selected }: NodeProps) {
   } = data as ArchitectureFlowNodeData;
   const updateNodeInternals = useUpdateNodeInternals();
   useEffect(() => { updateNodeInternals(id); }, [id, lod, architectureNode.inputs, architectureNode.outputs, updateNodeInternals]);
+  const securityTags = (data as ArchitectureFlowNodeData).securityTags ?? [];
   const definition = getNodeDefinition(architectureNode.type);
   const iconKey = (definition?.icon ?? "type") as keyof typeof ICONS;
   const Icon = ICONS[iconKey] ?? Type;
@@ -199,6 +201,7 @@ function FoundationNodeComponent({ id, data, selected }: NodeProps) {
     <article
       className={cn(
         "w-[280px] rounded-lg border bg-white/95 shadow-sm",
+        securityTags.length > 0 && "ring-2 ring-amber-400",
         selected
           ? "border-[var(--athanor-ember)] ring-2 ring-orange-200"
           : "border-[var(--athanor-mist)]",
@@ -228,6 +231,7 @@ function FoundationNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </header>
 
+      {securityTags.length > 0 && <p className="border-b bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">{securityTags.join(" · ")}</p>}
       <div className="space-y-2 px-3 py-2">
         {architectureNode.inputs.map((port) => (
           <PortRow key={port.id} nodeId={id} port={port} direction="input" />

@@ -20,11 +20,11 @@ Requirements:
 
 Use **versioned JSON Schema as the shared source of truth**, with language-specific mirrors and contract tests.
 
-1. **Canonical artifact:** `packages/contracts/schema/architecture-graph.v1.schema.json`
+1. **Canonical artifact:** `packages/contracts/schema/architecture-graph.v2.schema.json`
 2. **TypeScript mirror:** Zod schemas and exported types in `packages/contracts` that validate the same shape
 3. **Python mirror:** Pydantic v2 models in `apps/api/schemas` that validate the same shape
 4. **Parity enforcement:** Both stacks load golden fixtures and the JSON Schema in automated tests. CI fails if either mirror accepts/rejects fixtures differently from the canonical schema.
-5. **Versioning:** Every persisted project includes `schemaVersion` (e.g. `"1.0.0"`). Migrations live in `packages/contracts/migrations` (TS) and `apps/api/schemas/migrations` (Python) and are applied on load.
+5. **Versioning:** Every persisted project includes `schemaVersion`. Schema `2.0.0` deliberately rejects older projects and resets project storage once; migration-on-load was superseded by [ADR 0012](./0012-three-role-workflow.md).
 6. **Change control:** Any change to the canonical schema requires an ADR update or a new ADR, fixture updates, and dual-mirror updates in the same PR.
 
 Phase 0 ships schema `1.0.0` with the minimal graph envelope (metadata, nodes, edges, ports, viewport, empty extension points for macros/portals/validation/export). Later phases extend the schema rather than replacing it silently.
@@ -48,7 +48,7 @@ Phase 0 ships schema `1.0.0` with the minimal graph envelope (metadata, nodes, e
 
 ## Consequences
 
-- Adding a field means updating JSON Schema, Zod, Pydantic, fixtures, and migrations together.
+- Adding a field means updating JSON Schema, Zod, Pydantic, and fixtures together.
 - Early versions stay conservative: prefer additive, optional fields.
 - Export and compiler features consume the same graph document the UI persists.
 - Users can inspect and edit project JSON with standard tools because the format is documented JSON Schema.

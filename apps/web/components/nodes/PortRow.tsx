@@ -11,6 +11,9 @@ import {
   type NodePort,
 } from "@athanor/contracts";
 
+import { useProjectStore } from "@/store/project-store";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
+import { portLinked } from "@/lib/workflow";
 import { cn } from "@/lib/cn";
 import {
   useConnectionDraftStore,
@@ -64,6 +67,8 @@ type PortRowProps = {
 };
 
 export function PortRow({ nodeId, port, direction, compact = false }: PortRowProps) {
+  const review = useUiPreferencesStore(s => s.workspaceRole === "security");
+  const unused = useProjectStore(s => review && !portLinked(s.graph, nodeId, port.id));
   const draft = useConnectionDraftStore((state) => state.draft);
   const match = compatibilityForPort(draft, nodeId, port, direction);
   const label = CONTRACT_TYPE_LABELS[port.contractType];
@@ -73,6 +78,7 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
     <div
       className={cn(
         "group/port relative flex items-center gap-2 text-xs",
+        unused && "rounded bg-amber-50 outline outline-1 outline-amber-300",
         isInput ? "justify-start" : "justify-end",
         match === "incompatible" && draft ? "opacity-35" : null,
         match === "compatible" && "rounded bg-emerald-50/80 ring-1 ring-emerald-300/70",
@@ -116,6 +122,7 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
       >
         {label}
       </span>
+      {unused && <span className="text-[9px] text-amber-800">unused</span>}
       {!compact && port.required === false && (
         <span className="text-[10px] text-[var(--athanor-slate)]">opt</span>
       )}

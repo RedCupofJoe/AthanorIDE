@@ -355,7 +355,8 @@ def build_deployment_plan(
     ]
     if include_argo_cd:
         notes.append(
-            "Argo CD App of Apps is under deploy/argocd/ — set repoURL before applying root-app.yaml."
+            "Argo CD App of Apps is under deploy/argocd/ — set repoURL before "
+            "applying root-app.yaml."
         )
     if include_openshift:
         notes.append(

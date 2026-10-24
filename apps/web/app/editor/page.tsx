@@ -17,18 +17,19 @@ export default function EditorIndexPage() {
   const router = useRouter();
 
   useEffect(() => {
+    const query = window.location.search;
     const active = getActiveProjectId();
     if (active) {
-      router.replace(`/editor/${active}`);
+      router.replace(`/editor/${active}${query}`);
       return;
     }
     const first = listProjectSummaries()[0];
     if (first) {
-      router.replace(`/editor/${first.id}`);
+      router.replace(`/editor/${first.id}${query}`);
       return;
     }
     void createProject("Untitled project").then((created) => {
-      router.replace(`/editor/${created.project.id}`);
+      router.replace(`/editor/${created.project.id}${query}`);
     });
   }, [router]);
 

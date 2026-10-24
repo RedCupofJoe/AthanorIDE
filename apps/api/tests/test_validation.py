@@ -6,12 +6,12 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from athanor_api.schemas.graph import ArchitectureGraph
-from athanor_api.validation.contracts import are_contracts_compatible
 from athanor_api.validation import validate_architecture_graph
+from athanor_api.validation.contracts import are_contracts_compatible
 
 
 def test_validate_text_transform_fixture(contracts_root: Path, client: TestClient) -> None:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     # Ensure required config is present for a clean validation.
     for node in document["nodes"]:
@@ -28,7 +28,7 @@ def test_validate_text_transform_fixture(contracts_root: Path, client: TestClien
 
 
 def test_validate_rejects_incompatible_contracts(contracts_root: Path) -> None:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     # Force incompatible contracts on the first edge endpoints.
     for node in document["nodes"]:
@@ -48,7 +48,7 @@ def test_any_contract_is_only_a_wildcard_for_inputs() -> None:
 
 
 def test_validate_requires_transform_instruction(contracts_root: Path) -> None:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     for node in document["nodes"]:
         if node["type"] == "foundation.python_transform":
@@ -66,4 +66,5 @@ def test_node_definitions_lists_foundation(client: TestClient) -> None:
     assert "foundation.secret_reference" in types
     assert "fine_tuning.dataset_loader" in types
     assert "model.predictive" in types
-    assert len(types) == 60
+    assert len(types) == 64
+    assert len(set(types)) == len(types)

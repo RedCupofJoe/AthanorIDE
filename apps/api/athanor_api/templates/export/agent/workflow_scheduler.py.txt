@@ -1,0 +1,199 @@
+"""Stage scheduler shared by local and cluster launchers. No generated code evaluation."""
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import copy
+import json
+import subprocess
+import sys
+
+
+class WorkflowExecutionError(RuntimeError):
+    def __init__(self, code="execution_failure"):
+        self.code = code if code in {"execution_failure", "timeout", "guardrail_rejection"} else "execution_failure"
+        super().__init__("Workflow task failed: " + self.code)
+
+
+def task_instructions(task):
+    return f"Role:\n{task['role']}\n\nExpected tasks:\n{task['expectedTasks']}\n\nFunctional constraints:\n{task['constraints']}"
+
+
+def emit_status(task_id, stage, status):
+    print(json.dumps({"kind": "workflow_status", "taskId": task_id, "stage": stage, "status": status}), file=sys.stderr, flush=True)
+
+
+def emit_stage_status(stage, status):
+    print(json.dumps({"kind": "workflow_stage_status", "stage": stage, "status": status}), file=sys.stderr, flush=True)
+
+def workflow_plan(graph):
+    if graph.get("schemaVersion") != "2.0.0":
+        raise ValueError("Unsupported project version; schema 2.0.0 is required")
+    workflow = graph["workflow"]
+    tasks = {t["id"]: t for t in workflow["tasks"]}
+    if len(tasks) != len(workflow["tasks"]):
+        raise ValueError("Duplicate workflow task")
+    stages, incoming, recovery = {}, {}, {}
+    transitions = workflow["transitions"]
+    if len({e["id"] for e in transitions}) != len(transitions):
+        raise ValueError("Duplicate workflow transition")
+    for edge in transitions:
+        source, target = edge["sourceTaskId"], edge["targetTaskId"]
+        if target not in tasks or (source is not None and source not in tasks):
+            raise ValueError("Missing workflow task")
+        if type(edge["stage"]) is not int or edge["stage"] < 1:
+            raise ValueError("Invalid workflow stage")
+        if edge["kind"] == "normal":
+            if target in stages and stages[target] != edge["stage"]:
+                raise ValueError("Conflicting stages")
+            stages[target] = edge["stage"]
+            incoming.setdefault(target, []).append(source)
+        elif edge["kind"] == "recovery":
+            if source in recovery or target in recovery.values():
+                raise ValueError("Use one dedicated recovery per task")
+            recovery[source] = target
+        else:
+            raise ValueError("Unsupported workflow path")
+    for target, sources in incoming.items():
+        if len(set(sources)) != len(sources):
+            raise ValueError("Duplicate workflow path")
+        for source in sources:
+            if source is None:
+                if stages[target] != 1:
+                    raise ValueError("Start must connect to stage 1")
+            elif source not in stages or stages[source] >= stages[target]:
+                raise ValueError("Stages must advance")
+    for edge in transitions:
+        if edge["kind"] == "recovery":
+            source, target = edge["sourceTaskId"], edge["targetTaskId"]
+            if source not in stages or edge["stage"] != stages[source] or target in stages or any(e["sourceTaskId"] == target for e in transitions):
+                raise ValueError("Invalid recovery route")
+    if set(tasks) != set(stages) | set(recovery.values()):
+        raise ValueError("Unreachable workflow task")
+    limit = workflow["maxParallelTasks"]
+    if type(limit) is not int or not 1 <= limit <= 32:
+        raise ValueError("Parallel task limit must be between 1 and 32")
+    return tasks, stages, incoming, recovery
+
+
+def run_task(graph, task, text, runner):
+    """Evaluate only the declared result's dependency closure, with a bound input."""
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    entry, result = task["inputBinding"], task["outputBinding"]
+    for binding, direction in [(entry, "inputs"), (result, "outputs")]:
+        node = nodes[binding["nodeId"]]
+        if node.get("workflowTaskId") != task["id"] or not any(p["id"] == binding["portId"] and p["contractType"] == "STRING" for p in node[direction]):
+            raise ValueError("Invalid task boundary")
+    if any(e["targetNodeId"] == entry["nodeId"] and e["targetPortId"] == entry["portId"] for e in graph["edges"]):
+        raise ValueError("Task input boundary cannot also have a wire")
+    selected = {result["nodeId"]}
+    while True:
+        before = set(selected)
+        selected.update(e["sourceNodeId"] for e in graph["edges"] if e["targetNodeId"] in before)
+        if before == selected:
+            break
+    if entry["nodeId"] not in selected:
+        raise ValueError("Task input does not reach its result")
+    values, done = {(entry["nodeId"], entry["portId"]): text}, set()
+    pending = set(selected)
+    while pending:
+        ready = sorted(nid for nid in pending if all(e["sourceNodeId"] in done for e in graph["edges"] if e["targetNodeId"] == nid))
+        if not ready:
+            raise ValueError("Component cycle or missing source")
+        for nid in ready:
+            node = copy.deepcopy(nodes[nid])
+            cfg, kind = node["configuration"], node["type"]
+            inbound = {}
+            for port in node["inputs"]:
+                if (nid, port["id"]) in values:
+                    inbound[port["name"]] = values[(nid, port["id"])]
+                for edge in graph["edges"]:
+                    if edge["targetNodeId"] == nid and edge["targetPortId"] == port["id"]:
+                        inbound[port["name"]] = values[(edge["sourceNodeId"], edge["sourcePortId"])]
+            if kind == "foundation.text_input":
+                value = cfg["value"]
+            elif kind == "foundation.json_input":
+                value = cfg["json"]
+            elif kind == "foundation.prompt_template":
+                value = cfg["template"].replace("{{input}}", str(inbound.get("variables", "")))
+            elif kind == "foundation.output_viewer":
+                value = inbound.get("text", "")
+            elif kind == "agent.sandboxed" or kind.startswith("harness."):
+                if node.get("workflowTaskId") != task["id"]:
+                    raise ValueError("Executable components cannot cross task boundaries")
+                instructions = str(cfg.get("instructions", "")) if node.get("instructionMode") == "override" else task_instructions(task)
+                payload = str(inbound["task"])
+                if kind == "agent.sandboxed":
+                    cfg["instructions"] = instructions
+                else:
+                    payload = instructions + "\n\nTask input:\n" + payload
+                value = runner(graph, node, payload)
+            elif kind.startswith(("sandbox.", "mcp.", "agent.", "model.")):
+                value = cfg
+            else:
+                raise ValueError("Unsupported component in workflow task")
+            for port in node["outputs"]:
+                values[(nid, port["id"])] = value
+            done.add(nid)
+            pending.remove(nid)
+    output = values[(result["nodeId"], result["portId"])]
+    if not isinstance(output, str):
+        raise ValueError("Task result must be a string")
+    return output
+
+
+def run_workflow(graph, task_override=None, runner=None):
+    if runner is None:
+        raise ValueError("An isolated runner is required")
+    tasks, stages, incoming, recovery = workflow_plan(graph)
+    if not tasks:
+        raise ValueError("Add a workflow task, or use serve-mcp for a server project")
+    workflow = graph["workflow"]
+    initial = workflow["input"] if task_override is None else task_override
+    results = {}
+
+    def execute(task_id, stage, text):
+        emit_status(task_id, stage, "running")
+        try:
+            output = run_task(graph, tasks[task_id], text, runner)
+        except Exception as exc:
+            code = "timeout" if isinstance(exc, (TimeoutError, subprocess.TimeoutExpired)) else "guardrail_rejection" if isinstance(exc, PermissionError) else getattr(exc, "code", "execution_failure")
+            if code not in {"timeout", "execution_failure", "guardrail_rejection"}:
+                code = "execution_failure"
+            emit_status(task_id, stage, "failed")
+            handler = recovery.get(task_id)
+            if not handler:
+                raise WorkflowExecutionError(code) from None
+            emit_status(handler, stage, "recovering")
+            try:
+                output = run_task(graph, tasks[handler], json.dumps({"input": text, "failure": {"taskId": task_id, "code": code}}, sort_keys=True), runner)
+            except Exception:
+                emit_status(handler, stage, "failed")
+                raise WorkflowExecutionError() from None
+            emit_status(handler, stage, "succeeded")
+            emit_status(task_id, stage, "recovered")
+            return output
+        emit_status(task_id, stage, "succeeded")
+        return output
+
+    with ThreadPoolExecutor(max_workers=workflow["maxParallelTasks"]) as pool:
+        for stage in sorted(set(stages.values())):
+            emit_stage_status(stage, "running")
+            futures = {}
+            for tid in sorted(t for t in stages if stages[t] == stage):
+                sources = sorted(s for s in incoming[tid] if s is not None)
+                if not sources:
+                    text = initial
+                elif len(sources) == 1:
+                    text = results[sources[0]]
+                else:
+                    text = json.dumps({s: results[s] for s in sources}, sort_keys=True)
+                futures[pool.submit(execute, tid, stage, text)] = tid
+            failures = []
+            for future in as_completed(futures):
+                try:
+                    results[futures[future]] = future.result()
+                except WorkflowExecutionError as exc:
+                    failures.append(exc)
+            if failures:
+                emit_stage_status(stage, "failed")
+                raise failures[0]
+            emit_stage_status(stage, "succeeded")
+    return {tid: results[tid] for tid in sorted(results)}

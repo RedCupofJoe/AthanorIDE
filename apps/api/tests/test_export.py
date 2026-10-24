@@ -13,7 +13,7 @@ from athanor_api.schemas.graph import ArchitectureGraph
 
 @pytest.fixture
 def text_transform_graph(contracts_root: Path) -> ArchitectureGraph:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     return ArchitectureGraph.model_validate(document)
 
@@ -42,7 +42,7 @@ def test_export_contains_required_artifacts(text_transform_graph: ArchitectureGr
 
 
 def test_export_rejects_invalid_graph(contracts_root: Path) -> None:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     for node in document["nodes"]:
         if node["type"] == "foundation.python_transform":

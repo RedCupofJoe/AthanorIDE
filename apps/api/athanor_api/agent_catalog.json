@@ -594,6 +594,14 @@
     ],
     "configurationFields": [
       {
+        "key": "instructions",
+        "label": "Engineering instruction override",
+        "description": "Used only when SME instruction override is selected.",
+        "defaultValue": "",
+        "required": false,
+        "type": "text"
+      },
+      {
         "key": "endpoint",
         "label": "Deployed harness endpoint",
         "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
@@ -678,6 +686,14 @@
       }
     ],
     "configurationFields": [
+      {
+        "key": "instructions",
+        "label": "Engineering instruction override",
+        "description": "Used only when SME instruction override is selected.",
+        "defaultValue": "",
+        "required": false,
+        "type": "text"
+      },
       {
         "key": "endpoint",
         "label": "Deployed harness endpoint",
@@ -764,6 +780,14 @@
     ],
     "configurationFields": [
       {
+        "key": "instructions",
+        "label": "Engineering instruction override",
+        "description": "Used only when SME instruction override is selected.",
+        "defaultValue": "",
+        "required": false,
+        "type": "text"
+      },
+      {
         "key": "endpoint",
         "label": "Deployed harness endpoint",
         "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
@@ -848,6 +872,14 @@
       }
     ],
     "configurationFields": [
+      {
+        "key": "instructions",
+        "label": "Engineering instruction override",
+        "description": "Used only when SME instruction override is selected.",
+        "defaultValue": "",
+        "required": false,
+        "type": "text"
+      },
       {
         "key": "endpoint",
         "label": "Deployed harness endpoint",
@@ -934,6 +966,14 @@
     ],
     "configurationFields": [
       {
+        "key": "instructions",
+        "label": "Engineering instruction override",
+        "description": "Used only when SME instruction override is selected.",
+        "defaultValue": "",
+        "required": false,
+        "type": "text"
+      },
+      {
         "key": "endpoint",
         "label": "Deployed harness endpoint",
         "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
@@ -1018,6 +1058,14 @@
       }
     ],
     "configurationFields": [
+      {
+        "key": "instructions",
+        "label": "Engineering instruction override",
+        "description": "Used only when SME instruction override is selected.",
+        "defaultValue": "",
+        "required": false,
+        "type": "text"
+      },
       {
         "key": "endpoint",
         "label": "Deployed harness endpoint",

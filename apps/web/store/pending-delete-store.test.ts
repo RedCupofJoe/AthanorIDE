@@ -10,7 +10,7 @@ describe("pending delete store", () => {
     useSelectionStore.getState().clearSelection();
     useProjectStore.setState({
       graph: {
-        schemaVersion: "1.0.0",
+        schemaVersion: "2.0.0", workflow: {"tasks": [], "transitions": [], "input": "", "maxParallelTasks": 4, "viewport": {"x": 0, "y": 0, "zoom": 1}},
         project: {
           id: "test",
           name: "Test",

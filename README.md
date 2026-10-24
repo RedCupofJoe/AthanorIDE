@@ -8,7 +8,7 @@
 
 A local-first graphical workbench for designing sandboxed agents, connecting agent harnesses, and building or importing Model Context Protocol (MCP) servers. Configure endpoints, arguments, credentials by environment variable name, and execution limits through forms; connect blocks on a canvas; export editable code and deployment artifacts.
 
-The application keeps the **project → palette → canvas → inspector → validate/preview → export** workflow. The current palette focuses on agents and MCP. Earlier architecture/compiler modules remain in the repository, but existing projects are not automatically migrated into the new workspace.
+Three role tabs share one project: **Subject Matter Expert** defines task briefs and stages, **AI Engineer** implements each task inside a matching group, and **AgentOpSec Engineer** reviews controls, instruction overrides, credentials, and unused connections. See the [three-role user guide](docs/user-guide.md). Schema 2.0.0 resets older saved projects once; older graph imports are rejected. Templates, preferences, marketplace caches, and the local vault are preserved.
 
 ## Contents
 
@@ -108,25 +108,15 @@ On Linux, rootless Podman is the default local agent option. On macOS, start you
 
 ## Build your first agent
 
-1. Open the home screen and choose **Sandboxed agent**. The other starters are **MCP server** and **Agent harness**; a blank project is also available.
-2. Select **Text Input** and enter a task. Click **Apply** in the inspector after editing a block.
-3. Configure **Model Endpoint** with its full URL, including the Chat Completions path, and the exact model ID. Enter an environment variable name such as `MODEL_API_KEY` if authentication is required. The provider must support the compatible tool-calling API for agent tools to work.
-4. Configure an **API Tool** with its name, description, HTTP method, full endpoint, and argument schema. GET sends arguments as query parameters; POST, PUT, PATCH, and DELETE send JSON. Tool names must be unique within the agent's tools.
-5. Select a sandbox. Its default network is `none`; choose `bridge` when the workflow needs model, tool, or MCP endpoints. Configure memory, CPU, and process limits.
-6. Connect the blocks as shown below. Add optional tools/MCP connections as needed. Adjust agent instructions, maximum model turns, maximum tool calls, and timeout.
-7. Click **Validate**, resolve errors, and use **Run preview** to inspect the design. Choose an export format, click **Export**, and run the downloaded project using its README.
+1. Create a blank project to open **Subject Matter Expert**, or choose an agent/harness starter. **Parallel workflow + recovery** demonstrates two stage-1 tasks, a stage-2 join, and an A1 handler.
+2. Add or draw a task. Fill in its role, expected tasks, and functional constraints. Connect Start to the task with stage 1. Set the workflow input in the overview.
+3. **Export build brief** downloads a deterministic design ZIP for an external builder. It needs a valid SME design, not completed components.
+4. In **AI Engineer**, place an agent or harness and its model, tools, and sandbox. Select each component and assign its **Task group**. Shared resources may remain outside groups.
+5. Select the task group and choose its string input and result boundaries. Do not wire a separate component into the input boundary. Connect internal implementation components normally.
+6. Agent instructions inherit the latest SME brief. Use **Override instructions** to replace them explicitly; overrides remain visible during security review.
+7. In **AgentOpSec Engineer**, review highlighted controls and findings. Preview pruning before applying it; Undo and Restore optional ports are available. Validate, choose an export format, and export.
 
-```text
-Text Input ──────── task ────┐
-Model Endpoint ─── model ────┤
-Sandbox policy ─ sandbox ────┼──► Sandboxed Agent ── result ──► Output Viewer
-API Tool ───────── tools ────┤
-MCP Connection ───── mcp ────┘
-```
-
-Connect an agent's result to another agent's task to chain agents. A Prompt Template replaces `{{input}}` with its connected text input. API schemas use JSON Schema 2020-12; schema references must stay local to `$defs`.
-
-A harness starter uses a deployed HTTP service instead of a local model/tool loop. By default the adapter POSTs `{"input":"task text"}` and expects `{"output":"result text"}`. Configure the request and response field names in the inspector. The remote service owns its models, tools, approvals, state, retries, and isolation.
+Configure real endpoints, model IDs, allowed tools, and credential environment-variable names before running exported code. Network access starts disabled in the agent starter; enable the intended sandbox network policy when required. **Run preview** only displays planned stages and recovery routes. See [docs/user-guide.md](docs/user-guide.md) for execution semantics and keyboard controls.
 
 ## MCP servers and imports
 
@@ -290,12 +280,12 @@ Cluster exports use **one pod boundary for the entire workflow**, with deadlines
 
 ## Storage, backups, and credentials
 
-Projects autosave in browser localStorage. There is no backend project database to provision or reset. The agent workspace uses a new namespace; old architecture projects are left untouched and are not automatically loaded or migrated.
+Projects autosave in IndexedDB, with a localStorage metadata index and a localStorage fallback for restricted browsers. There is no backend project database. The version-2 database upgrade resets the project object store; a one-time cleanup replaces old project indexes and project-body keys. New projects and unrelated stored data survive subsequent loads. Only schema 2.0.0 imports are supported.
 
 | Data | Location / backup method |
 | --- | --- |
-| Project index | `athanoride.agents.projects.index.v1` in browser localStorage |
-| Individual graphs | `athanoride.agents.project.<id>.v1`; back up each with **Graph JSON** |
+| Project index | `athanoride.agents.projects.index.v2` in browser localStorage |
+| Individual graphs | IndexedDB `athanoride-project-library` / `projects`; restricted-browser fallback `athanoride.agents.project.v2.<id>`; back up with **Graph JSON** |
 | Block template library | `athanor.block-templates.v1`; back up separately with **Export templates** |
 | Local secrets vault | Encrypted API-side file under `~/.local/share/athanor/vault/`, configurable with `ATHANOR_DATA_DIR` |
 
@@ -412,4 +402,4 @@ Core API routes are `GET /api/v1/health`, `GET /api/v1/node-definitions`, and `P
 | [Contracts README](packages/contracts/README.md) | Graph schema and shared contract types |
 | [UI package README](packages/ui/README.md) | Shared UI package |
 | [Architecture](docs/architecture.md), [security model](docs/security-model.md), [ADRs](docs/decisions/README.md) | Retained architecture, compiler/vault details, and design history; use the agent guide for current export behavior |
-| [Earlier user guide](docs/user-guide.md), [earlier node catalog](docs/node-catalog.md), [development plan](docs/development-plan.md) | Historical architecture workflow and retained modules; not a complete description of the current palette |
+| [Three-role user guide](docs/user-guide.md), [earlier node catalog](docs/node-catalog.md), [development plan](docs/development-plan.md) | Historical architecture workflow and retained modules; not a complete description of the current palette |

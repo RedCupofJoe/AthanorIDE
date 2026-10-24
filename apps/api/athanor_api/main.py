@@ -19,6 +19,7 @@ from athanor_api.catalog import FOUNDATION_NODE_SUMMARIES
 from athanor_api.compiler import compile_transformation, validate_compiled_source
 from athanor_api.execution import execute_architecture_graph
 from athanor_api.exporter import ExportError, export_architecture_graph
+from athanor_api.exporter.handoff import create_handoff
 from athanor_api.logging_config import bind_correlation_id, configure_logging
 from athanor_api.marketplace import (
     MARKETPLACE_TOPICS,
@@ -40,6 +41,8 @@ from athanor_api.schemas.api import (
     ExecutionStepModel,
     ExportProjectRequest,
     ExportProjectResponse,
+    HandoffRequest,
+    HandoffResponse,
     HealthResponse,
     ManifestEntryModel,
     NodeDefinitionsResponse,
@@ -239,7 +242,7 @@ async def validate_project(body: ValidateProjectRequest) -> ValidateProjectRespo
     """Validate an architecture graph without executing the pipeline."""
 
     started = time.perf_counter()
-    issues = await run_cpu_bound(validate_architecture_graph, body.graph)
+    issues = await run_cpu_bound(validate_architecture_graph, body.graph, body.profile)
     duration_ms = (time.perf_counter() - started) * 1000
     error_count = sum(1 for issue in issues if issue.severity == "error")
     logger.info(
@@ -343,6 +346,15 @@ async def export_project(body: ExportProjectRequest) -> ExportProjectResponse:
         validationIssues=result.validation_issues,
         archiveBase64=result.archive_base64,
     )
+
+
+@app.post("/api/v1/projects/handoff", response_model=HandoffResponse, tags=["projects"])
+async def handoff_project(body: HandoffRequest) -> HandoffResponse:
+    try:
+        files, archive = await run_cpu_bound(create_handoff, body.graph)
+    except ExportError as exc:
+        raise StarletteHTTPException(status_code=400, detail=str(exc)) from exc
+    return HandoffResponse(files=files, archiveBase64=archive)
 
 
 def _audit_model(audit: object) -> AuditRecordModel:

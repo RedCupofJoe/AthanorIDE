@@ -31,6 +31,7 @@ def render_agent_files(
         "container_entry.py": (RUNTIME_ROOT / "container_entry.py.txt").read_text(),
         "app/__init__.py": "",
         "workflow.py": (RUNTIME_ROOT / "workflow.py.txt").read_text(),
+        "workflow_scheduler.py": (RUNTIME_ROOT / "workflow_scheduler.py.txt").read_text(),
         "app/agent_worker.py": (RUNTIME_ROOT / "worker.py.txt").read_text(),
         "app/mcp_server.py": (RUNTIME_ROOT / "mcp_server.py.txt").read_text(),
         "app/customer_harness.py": (RUNTIME_ROOT / "customer_harness.py.txt").read_text(),
@@ -56,7 +57,8 @@ def render_agent_files(
             "COPY requirements-agent.txt .\nRUN pip install --no-cache-dir -r "
             "requirements-agent.txt\n"
             "COPY app/agent_worker.py app/mcp_server.py app/customer_harness.py ./app/\n"
-            "COPY agent-workflow.json workflow.py container_entry.py .\nUSER 65532:65532\n"
+            "COPY agent-workflow.json workflow.py workflow_scheduler.py container_entry.py .\n"
+            "USER 65532:65532\n"
             "ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1\n"
             'CMD ["python", "workflow.py", "plan"]\n'
         ),

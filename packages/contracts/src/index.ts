@@ -1,11 +1,11 @@
 /**
  * Canonical architecture-graph Zod schemas, types, and empty-graph factory.
- * Mirrors packages/contracts/schema/architecture-graph.v1.schema.json.
+ * Mirrors packages/contracts/schema/architecture-graph.v2.schema.json.
  */
 import { z } from "zod";
 
-/** Persisted schema version. Must match packages/contracts/schema/architecture-graph.v1.schema.json */
-export const SCHEMA_VERSION = "1.0.0" as const;
+/** Persisted schema version. Must match packages/contracts/schema/architecture-graph.v2.schema.json */
+export const SCHEMA_VERSION = "2.0.0" as const;
 
 export const ContractTypeSchema = z.enum([
   "STRING",
@@ -62,6 +62,11 @@ export const ArchitectureNodeSchema = z.object({
   outputs: z.array(NodePortSchema),
   deploymentTarget: z.string().optional(),
   parentMacroId: z.string().optional(),
+  workflowTaskId: z.string().min(1).optional(),
+  instructionMode: z.enum(["inherit", "override"]).optional(),
+  prunedPorts: z
+    .object({ inputs: z.array(z.string()), outputs: z.array(z.string()) })
+    .optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -93,6 +98,10 @@ export const ValidationIssueSchema = z.object({
   message: z.string().min(1),
   nodeId: z.string().nullable().optional(),
   edgeId: z.string().nullable().optional(),
+  taskId: z.string().nullable().optional(),
+  transitionId: z.string().nullable().optional(),
+  portId: z.string().nullable().optional(),
+  fieldPath: z.string().nullable().optional(),
   suggestedAction: z.string().nullable().optional(),
 });
 
@@ -101,6 +110,66 @@ export const ViewportSchema = z.object({
   y: z.number(),
   zoom: z.number().positive(),
 });
+
+export const WorkflowBoundsSchema = z
+  .object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number().min(240),
+    height: z.number().min(180),
+  })
+  .strict();
+export const WorkflowBindingSchema = z
+  .object({ nodeId: z.string().min(1), portId: z.string().min(1) })
+  .strict();
+export const WorkflowTaskSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    role: z.string(),
+    expectedTasks: z.string(),
+    constraints: z.string(),
+    bounds: WorkflowBoundsSchema,
+    engineeringBounds: WorkflowBoundsSchema,
+    inputBinding: WorkflowBindingSchema.optional(),
+    outputBinding: WorkflowBindingSchema.optional(),
+  })
+  .strict();
+export const WorkflowTransitionSchema = z
+  .object({
+    id: z.string().min(1),
+    sourceTaskId: z.string().min(1).nullable(),
+    targetTaskId: z.string().min(1),
+    kind: z.enum(["normal", "recovery"]),
+    stage: z.number().int().positive(),
+    recoveryDescription: z.string(),
+  })
+  .strict();
+export const WorkflowSchema = z
+  .object({
+    tasks: z.array(WorkflowTaskSchema),
+    transitions: z.array(WorkflowTransitionSchema),
+    input: z.string(),
+    maxParallelTasks: z.number().int().min(1).max(32),
+    viewport: ViewportSchema,
+  })
+  .strict();
+export type WorkflowTask = z.infer<typeof WorkflowTaskSchema>;
+export type WorkflowTransition = z.infer<typeof WorkflowTransitionSchema>;
+export type Workflow = z.infer<typeof WorkflowSchema>;
+export function createEmptyWorkflow(): Workflow {
+  return {
+    tasks: [],
+    transitions: [],
+    input: "",
+    maxParallelTasks: 4,
+    viewport: { x: 0, y: 0, zoom: 1 },
+  };
+}
+export function taskInstructions(task: WorkflowTask): string {
+  return `Role:\n${task.role}\n\nExpected tasks:\n${task.expectedTasks}\n\nFunctional constraints:\n${task.constraints}`;
+}
 
 export const DeploymentEnvironmentKindSchema = z.enum([
   "LOCAL_WORKSTATION",
@@ -125,7 +194,9 @@ export const InfrastructureTokenKindSchema = z.enum([
   "custom",
 ]);
 
-export type InfrastructureTokenKind = z.infer<typeof InfrastructureTokenKindSchema>;
+export type InfrastructureTokenKind = z.infer<
+  typeof InfrastructureTokenKindSchema
+>;
 
 export const InfrastructureTokenSlotSchema = z.object({
   id: z.string().min(1),
@@ -133,21 +204,41 @@ export const InfrastructureTokenSlotSchema = z.object({
   label: z.string().min(1),
   /** Secret name only — never the token value. */
   secretName: z.string(),
-  provider: z.enum(["env", "file", "vault", "cloud_secret_manager"]).default("env"),
+  provider: z
+    .enum(["env", "file", "vault", "cloud_secret_manager"])
+    .default("env"),
   recommendedEnvName: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
-export type InfrastructureTokenSlot = z.infer<typeof InfrastructureTokenSlotSchema>;
+export type InfrastructureTokenSlot = z.infer<
+  typeof InfrastructureTokenSlotSchema
+>;
 
 /** Built-in infrastructure pull-token providers shown by default. */
 export const DEFAULT_INFRASTRUCTURE_TOKEN_KINDS = [
-  { kind: "huggingface", label: "Hugging Face", recommendedEnvName: "HF_TOKEN" },
+  {
+    kind: "huggingface",
+    label: "Hugging Face",
+    recommendedEnvName: "HF_TOKEN",
+  },
   { kind: "kaggle", label: "Kaggle", recommendedEnvName: "KAGGLE_KEY" },
-  { kind: "docker", label: "Docker Hub", recommendedEnvName: "DOCKERHUB_TOKEN" },
+  {
+    kind: "docker",
+    label: "Docker Hub",
+    recommendedEnvName: "DOCKERHUB_TOKEN",
+  },
   { kind: "github", label: "GitHub", recommendedEnvName: "GITHUB_TOKEN" },
-  { kind: "uci_ml", label: "UCI Machine Learning", recommendedEnvName: "UCI_ML_TOKEN" },
-  { kind: "pytorch_hub", label: "PyTorch Hub", recommendedEnvName: "PYTORCH_HUB_TOKEN" },
+  {
+    kind: "uci_ml",
+    label: "UCI Machine Learning",
+    recommendedEnvName: "UCI_ML_TOKEN",
+  },
+  {
+    kind: "pytorch_hub",
+    label: "PyTorch Hub",
+    recommendedEnvName: "PYTORCH_HUB_TOKEN",
+  },
 ] as const satisfies ReadonlyArray<{
   kind: Exclude<InfrastructureTokenKind, "custom">;
   label: string;
@@ -170,6 +261,7 @@ export const ArchitectureGraphSchema = z.object({
   project: ProjectMetadataSchema,
   nodes: z.array(ArchitectureNodeSchema),
   edges: z.array(ArchitectureEdgeSchema),
+  workflow: WorkflowSchema,
   contracts: z
     .array(
       z.object({
@@ -245,6 +337,16 @@ export const ArchitectureGraphSchema = z.object({
 export type ArchitectureGraph = z.infer<typeof ArchitectureGraphSchema>;
 
 export function parseArchitectureGraph(input: unknown): ArchitectureGraph {
+  if (
+    input &&
+    typeof input === "object" &&
+    "schemaVersion" in input &&
+    input.schemaVersion !== SCHEMA_VERSION
+  ) {
+    throw new Error(
+      "Unsupported project version. This workspace requires schema 2.0.0; create a new project.",
+    );
+  }
   return ArchitectureGraphSchema.parse(input);
 }
 
@@ -263,7 +365,9 @@ export function newId(): string {
     // RFC 4122 version 4
     bytes[6] = (bytes[6]! & 0x0f) | 0x40;
     bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const hex = Array.from(bytes, (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
   return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
@@ -281,6 +385,7 @@ export function createEmptyGraph(name = "Untitled Project"): ArchitectureGraph {
     },
     nodes: [],
     edges: [],
+    workflow: createEmptyWorkflow(),
     contracts: [],
     deploymentEnvironments: [],
     macroBlocks: [],

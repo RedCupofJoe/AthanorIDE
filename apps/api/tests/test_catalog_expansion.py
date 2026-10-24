@@ -18,7 +18,14 @@ def _project_meta() -> dict:
 def test_invalid_tool_schema_rejected() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [
                 {
@@ -56,7 +63,14 @@ def test_invalid_tool_schema_rejected() -> None:
 def test_identity_rejects_embedded_credentials() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [
                 {
@@ -95,7 +109,14 @@ def test_identity_rejects_embedded_credentials() -> None:
 def test_export_includes_category_lineage() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [
                 {
@@ -197,7 +218,14 @@ def test_export_includes_category_lineage() -> None:
 def test_lineage_nodes_skipped_in_executor() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [
                 {

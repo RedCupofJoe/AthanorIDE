@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from athanor_api.catalog import NODE_CATALOG
 from athanor_api.execution import execute_architecture_graph
 from athanor_api.exporter import export_architecture_graph
+from athanor_api.exporter.service import ExportError
 from athanor_api.schemas.graph import ArchitectureGraph
 from athanor_api.validation import validate_architecture_graph
 
@@ -135,7 +138,14 @@ def test_agentic_harness_required_config_order() -> None:
 def test_big_block_rejects_embedded_secret_key() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [_gateway_node(extra_config={"apiKey": "sk-live-should-not-appear"})],
             "edges": [],
@@ -149,7 +159,14 @@ def test_big_block_rejects_embedded_secret_key() -> None:
 def test_big_block_rejects_long_token_secret_name() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [_gateway_node(extra_config={"tokenSecretName": "x" * 200})],
             "edges": [],
@@ -163,7 +180,14 @@ def test_big_block_rejects_long_token_secret_name() -> None:
 def test_big_block_rejects_secret_in_custom_template() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [
                 _gateway_node(
@@ -183,7 +207,14 @@ def test_big_block_rejects_secret_in_custom_template() -> None:
 def test_export_includes_big_blocks_lineage() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [_gateway_node()],
             "edges": [],
@@ -196,11 +227,18 @@ def test_export_includes_big_blocks_lineage() -> None:
     assert "big_blocks.ai_gateway" in architecture
 
 
-def test_export_redacts_secrets_in_custom_template() -> None:
+def test_export_blocks_secrets_even_when_other_validation_is_bypassed() -> None:
     secret = "sk-abcdefghijklmnopqrstuvwxyz012345"
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [
                 _gateway_node(
@@ -213,22 +251,22 @@ def test_export_redacts_secrets_in_custom_template() -> None:
             "viewport": {"x": 0, "y": 0, "zoom": 1},
         }
     )
-    # Defense-in-depth: even if validation is bypassed, export must redact.
-    result = export_architecture_graph(
-        graph,
-        project_slug="big-blocks-redact",
-        allow_invalid=True,
-    )
-    architecture = result.files["docs/architecture.md"]
-    assert "## Big Blocks lineage" in architecture
-    assert secret not in architecture
-    assert "[REDACTED]" in architecture
+    # The diagnostic escape hatch must never leak credentials into new artifacts.
+    with pytest.raises(ExportError):
+        export_architecture_graph(graph, project_slug="big-blocks-redact", allow_invalid=True)
 
 
 def test_big_block_skipped_in_executor() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": _project_meta(),
             "nodes": [_gateway_node()],
             "edges": [],

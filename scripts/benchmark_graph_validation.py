@@ -16,7 +16,7 @@ from athanor_api.schemas.graph import ArchitectureGraph
 from athanor_api.validation import validate_architecture_graph
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURE = ROOT / "packages" / "contracts" / "fixtures" / "text-transform.v1.json"
+FIXTURE = ROOT / "packages" / "contracts" / "fixtures" / "text-transform.v2.json"
 
 
 def graph_with_pipeline_count(template: dict[str, Any], count: int) -> ArchitectureGraph:

@@ -6,6 +6,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { ROLES } from "@/components/workflow/RoleTabs";
 import { HealthStatus } from "@/components/HealthStatus";
 import { ProjectSidebar } from "@/components/projects/ProjectSidebar";
 
@@ -32,6 +33,7 @@ export function HomeShell() {
             Connect API endpoints, choose your isolation, and export readable code.
             Start with an example from the sidebar — every project stays saved in this browser.
           </p>
+          <div className="grid gap-2 sm:grid-cols-3">{ROLES.map(role => <Link key={role.id} href={`/editor?role=${role.id}`} className="rounded-lg border bg-white p-3 text-sm"><strong>{role.label}</strong><span className="mt-1 block text-xs text-slate-600">{role.description}</span></Link>)}</div>
           <div className="flex flex-wrap gap-3">
             <Link
               href="/editor"

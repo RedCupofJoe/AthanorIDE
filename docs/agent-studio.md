@@ -2,7 +2,7 @@
 
 AthanorIDE preserves the existing project library, canvas, palette, inspector, validation,
 preview, and export flow. The main palette now focuses on executable agent and MCP
-blocks. Existing project storage is not migrated; agent projects use a new namespace.
+blocks. Schema 2.0.0 resets old saved projects once. Use the [three-role user guide](./user-guide.md) for task design, grouped implementation, security review, stage execution, and recovery. Templates and other unrelated storage are preserved.
 No backend database reset is required for browser-local projects.
 
 ## Build a workflow

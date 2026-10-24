@@ -18,4 +18,4 @@ Builders live in `apps/web/lib/example-projects.ts`.
 
 See [text-transformation/README.md](./text-transformation/README.md) for validating, exporting, and running the generated FastAPI container.
 
-Golden fixture: `packages/contracts/fixtures/text-transform.v1.json`.
+Golden fixture: `packages/contracts/fixtures/text-transform.v2.json`.

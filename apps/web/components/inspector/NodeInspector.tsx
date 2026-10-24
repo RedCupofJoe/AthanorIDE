@@ -126,6 +126,7 @@ export function NodeInspector() {
     field: NonNullable<typeof definition>["configurationFields"][number],
   ) => {
     if (!fieldVisible(field)) return null;
+    if (field.key === "instructions" && node?.workflowTaskId && node.instructionMode !== "override") return null;
     return (
     <div key={field.key} className="block space-y-1 text-sm">
       <span className="font-medium">{field.label}</span>

@@ -69,11 +69,21 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
             continue
         cfg = node.configuration
         for direction in ("inputs", "outputs"):
-            expected = definition[direction]
+            omissions = getattr(node.pruned_ports, direction) if node.pruned_ports else []
+            removable = {p["name"] for p in definition[direction] if not p["required"]}
+            if len(set(omissions)) != len(omissions) or set(omissions) - removable:
+                issue(
+                    node.id,
+                    "INVALID_PRUNING",
+                    "Only catalog-defined optional ports may be omitted.",
+                    "Restore required ports.",
+                )
+            expected = [p for p in definition[direction] if p["name"] not in omissions]
             actual = getattr(node, direction)
             actual_by_name = {p.name: p for p in actual}
             if len(actual) != len(expected) or any(
                 p["name"] not in actual_by_name
+                or actual_by_name[p["name"]].direction != p["direction"]
                 or actual_by_name[p["name"]].contract_type.value != p["contractType"]
                 or actual_by_name[p["name"]].required != p["required"]
                 or actual_by_name[p["name"]].multiple != p["multiple"]
@@ -304,9 +314,7 @@ def validate_agent_studio(graph: ArchitectureGraph) -> list[ValidationIssue]:
                     "Shorten the phrase list.",
                 )
             tool_names = [
-                name.strip()
-                for name in str(cfg.get("denyTools", "")).split(",")
-                if name.strip()
+                name.strip() for name in str(cfg.get("denyTools", "")).split(",") if name.strip()
             ]
             if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name) for name in tool_names):
                 issue(

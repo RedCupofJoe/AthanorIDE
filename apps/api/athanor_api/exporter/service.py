@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import json
 import logging
 import time
 import zipfile
@@ -94,7 +95,9 @@ def export_architecture_graph(
     started = time.perf_counter()
     validation_issues = validate_architecture_graph(graph)
     errors = [issue for issue in validation_issues if issue.severity == "error"]
-    if errors and not allow_invalid:
+    if errors and (
+        not allow_invalid or any(i.code == "SECURITY_EMBEDDED_CREDENTIAL" for i in errors)
+    ):
         raise ExportError(
             "Cannot export a graph with validation errors",
             validation_issues=validation_issues,
@@ -113,6 +116,23 @@ def export_architecture_graph(
         files = render_export_files(ir, export_format)
     except ValueError as exc:
         raise ExportError(str(exc), validation_issues=validation_issues) from exc
+    from athanor_api.exporter.handoff import workflow_documents
+
+    files.update(workflow_documents(graph))
+    files["security-review.json"] = (
+        json.dumps(
+            {
+                "schemaVersion": graph.schema_version,
+                "issues": [
+                    issue.model_dump(by_alias=True, exclude_none=True)
+                    for issue in validation_issues
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     generation_issues = validate_generated_files(files)
     if generation_issues:
         raise ExportError(

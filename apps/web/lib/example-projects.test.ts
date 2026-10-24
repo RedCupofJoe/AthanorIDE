@@ -3,15 +3,15 @@ import { areContractsCompatible } from "@athanor/contracts";
 import { EXAMPLE_PROJECTS, buildExampleProject } from "./example-projects";
 
 describe("agent starter projects", () => {
-  it("exposes the three agent engineering flows", () => {
-    expect(EXAMPLE_PROJECTS.map(item => item.id)).toEqual(["sandboxed-agent", "mcp-server", "agent-harness"]);
+  it("exposes role-aware agent engineering flows", () => {
+    expect(EXAMPLE_PROJECTS.map(item => item.id)).toEqual(["parallel-workflow", "sandboxed-agent", "mcp-server", "agent-harness"]);
   });
   it.each(EXAMPLE_PROJECTS)("$name connects every required input with matching contracts", example => {
     const graph = example.build();
     expect(graph.project.id).not.toBe(example.build().project.id);
     for (const node of graph.nodes) {
       for (const port of node.inputs.filter(p => p.required)) {
-        expect(graph.edges.some(e => e.targetNodeId === node.id && e.targetPortId === port.id)).toBe(true);
+        expect(graph.edges.some(e => e.targetNodeId === node.id && e.targetPortId === port.id) || graph.workflow.tasks.some(t => t.inputBinding?.nodeId === node.id && t.inputBinding.portId === port.id)).toBe(true);
       }
     }
     for (const edge of graph.edges) {

@@ -19,7 +19,8 @@ Or use `make dev` to start API + web together.
 | --- | --- |
 | `GET /api/v1/health` | Liveness |
 | `GET /api/v1/node-definitions` | Current agent and retained legacy catalog summaries |
-| `POST /api/v1/projects/validate` | Graph validation |
+| `POST /api/v1/projects/validate` | `design` or `deployment` validation profile (default deployment) |
+| `POST /api/v1/projects/handoff` | Deterministic SME workflow/build-brief ZIP; no implementation required |
 | `POST /api/v1/projects/execute` | Agent/MCP design preview; retained legacy payload handlers |
 | `POST /api/v1/projects/export` | Validated export ZIP, manifest, and file map |
 | `POST /api/v1/compiler/generate` | NL → TransformationSpec / code |
@@ -29,7 +30,7 @@ Or use `make dev` to start API + web together.
 
 ## Agent validation, preview, and export
 
-Agent validation checks endpoints, schemas, environment variable names, tool naming, required connections, sandbox policies, and supported configuration. The execute route previews agent/MCP blocks without calling models, HTTP tools, or MCP servers and without launching those workers. Retained transform handlers may use the Podman sandbox; preview guarantees for agent blocks do not replace the legacy execution rules below.
+Graph schema 2.0.0 requires a workflow section. Deployment validates task membership, string boundaries, stage topology, dedicated recovery, instruction inheritance, optional-port omissions, and nested credential findings. Design validation checks briefs and transitions without requiring components. Agent validation checks endpoints, schemas, environment variable names, tool naming, required connections, sandbox policies, and supported configuration. The execute route previews agent/MCP blocks without calling models, HTTP tools, or MCP servers and without launching those workers. Retained transform handlers may use the Podman sandbox; preview guarantees for agent blocks do not replace the legacy execution rules below.
 
 Agent graphs use `exporter/agent_studio.py` and `exporter/agent_packaging.py`, with Python sources in `templates/export/agent/`. The export request's `exportFormat` accepts:
 

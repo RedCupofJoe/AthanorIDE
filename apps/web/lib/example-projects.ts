@@ -3,10 +3,12 @@
  */
 import {
   createEmptyGraph,
+  newId,
   type ArchitectureEdge,
   type ArchitectureGraph,
   type ArchitectureNode,
 } from "@athanor/contracts";
+import { createWorkflowTask, isExecutable } from "./workflow";
 import { createNodeFromDefinition } from "@athanor/node-definitions";
 
 export type ExampleProjectDefinition = {
@@ -44,6 +46,21 @@ function stampProject(
   edges: ArchitectureEdge[],
 ): ArchitectureGraph {
   const graph = createEmptyGraph(name);
+  const agent = nodes.find(n => isExecutable(n.type));
+  if (agent) {
+    const task = createWorkflowTask();
+    task.name = name; task.role = "Task specialist"; task.expectedTasks = description;
+    task.constraints = "Use only configured capabilities. Respect the connected guardrails, approvals, and execution limits.";
+    task.engineeringBounds = { x: -30, y: -60, width: 1400, height: 1000 };
+    task.inputBinding = { nodeId: agent.id, portId: agent.inputs.find(p => p.name === "task")!.id };
+    task.outputBinding = { nodeId: agent.id, portId: agent.outputs.find(p => p.name === "result")!.id };
+    const source = nodes.find(n => n.type === "foundation.text_input");
+    graph.workflow.input = String(source?.configuration.value ?? "");
+    nodes = nodes.filter(n => n.id !== source?.id).map(n => ({ ...n, workflowTaskId: task.id, ...(isExecutable(n.type) ? { instructionMode: "inherit" as const } : {}) }));
+    edges = edges.filter(e => e.sourceNodeId !== source?.id);
+    graph.workflow.tasks = [task];
+    graph.workflow.transitions = [{ id: newId(), sourceTaskId: null, targetTaskId: task.id, kind: "normal", stage: 1, recoveryDescription: "" }];
+  }
   return {
     ...graph,
     project: {
@@ -93,7 +110,35 @@ function buildHarness(): ArchitectureGraph {
   ]);
 }
 
+
+function buildParallelWorkflow(): ArchitectureGraph {
+  const graph = createEmptyGraph("Parallel research with recovery");
+  const labels = ["Research evidence", "Check requirements", "Combine findings", "Recover research"];
+  for (let i = 0; i < labels.length; i++) {
+    const part = buildSandboxedAgent();
+    const task = part.workflow.tasks[0]!;
+    task.color = createWorkflowTask(i).color;
+    task.name = labels[i]!; task.expectedTasks = labels[i]!;
+    task.bounds = { x: i < 2 ? 260 : 720, y: i === 1 || i === 3 ? 460 : 60, width: 320, height: 340 };
+    task.engineeringBounds = { ...task.engineeringBounds, x: i * 1500 - 30 };
+    graph.workflow.tasks.push(task);
+    graph.nodes.push(...part.nodes.map(n => ({ ...n, position: { x: n.position.x + i * 1500, y: n.position.y } })));
+    graph.edges.push(...part.edges.map(e => ({ ...e, id: newId() })));
+  }
+  const [a, b, join, recover] = graph.workflow.tasks;
+  graph.workflow.input = "Research the requested topic and produce a grounded recommendation.";
+  graph.workflow.transitions = [
+    { id: newId(), sourceTaskId: null, targetTaskId: a!.id, kind: "normal", stage: 1, recoveryDescription: "" },
+    { id: newId(), sourceTaskId: null, targetTaskId: b!.id, kind: "normal", stage: 1, recoveryDescription: "" },
+    { id: newId(), sourceTaskId: a!.id, targetTaskId: join!.id, kind: "normal", stage: 2, recoveryDescription: "" },
+    { id: newId(), sourceTaskId: b!.id, targetTaskId: join!.id, kind: "normal", stage: 2, recoveryDescription: "" },
+    { id: newId(), sourceTaskId: a!.id, targetTaskId: recover!.id, kind: "recovery", stage: 1, recoveryDescription: "Return a bounded alternative result using the original input and failure category." },
+  ];
+  return graph;
+}
+
 export const EXAMPLE_PROJECTS: readonly ExampleProjectDefinition[] = [
+  { id: "parallel-workflow", name: "Parallel workflow + recovery", description: "Two parallel tasks, a joined result, and an A1 recovery route.", build: buildParallelWorkflow },
   { id: "sandboxed-agent", name: "Sandboxed agent", description: "Task → model + approved API tools → isolated agent → result.", build: buildSandboxedAgent },
   { id: "mcp-server", name: "MCP server", description: "API tools, resources, and prompts → sandboxed MCP server.", build: buildMcpServer },
   { id: "agent-harness", name: "Agent harness", description: "Connect an existing harness endpoint with a sandboxed adapter.", build: buildHarness },

@@ -9,7 +9,7 @@ from athanor_api.validation import validate_architecture_graph
 
 
 def _base_document(contracts_root: Path) -> dict:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     for node in document["nodes"]:
         if node["type"] == "foundation.python_transform":

@@ -11,7 +11,14 @@ from athanor_api.validation import validate_architecture_graph
 def test_invalid_json_input_rejected() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": {
                 "id": "p1",
                 "name": "JSON",
@@ -50,7 +57,14 @@ def test_invalid_json_input_rejected() -> None:
 def test_secret_reference_rejects_embedded_value() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": {
                 "id": "p1",
                 "name": "Secrets",
@@ -93,7 +107,7 @@ def test_secret_reference_rejects_embedded_value() -> None:
 def test_export_includes_env_secret_and_catalog(
     contracts_root: Path,
 ) -> None:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     for node in document["nodes"]:
         if node["type"] == "foundation.python_transform":
@@ -191,7 +205,14 @@ def test_export_includes_env_secret_and_catalog(
 def test_lora_requires_positive_hyperparameters() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": {
                 "id": "p1",
                 "name": "LoRA",

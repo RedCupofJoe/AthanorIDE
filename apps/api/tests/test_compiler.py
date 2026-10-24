@@ -108,7 +108,7 @@ def test_export_uses_compiled_code(client: TestClient, contracts_root: object) -
     from athanor_api.schemas.graph import ArchitectureGraph
 
     assert isinstance(contracts_root, Path)
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     artifacts = compile_transformation(instruction="uppercase the input")
     for node in document["nodes"]:

@@ -28,13 +28,12 @@ AthanorIDE is a monorepo containing:
 Opinionated multi-tech composites live in the **Big Blocks** catalog category (`big_blocks.*`): lineage/config only (IDE Run skips them). See [ADR 0010](./decisions/0010-big-blocks.md) and [node-catalog.md](./node-catalog.md).
 ## Canonical graph
 
-Persisted projects are JSON documents conforming to `packages/contracts/schema/architecture-graph.v1.schema.json`.
+Persisted projects are JSON documents conforming to `packages/contracts/schema/architecture-graph.v2.schema.json`.
 
 Browser persistence:
 
-- Project metadata index remains in localStorage: `athanoride.agents.projects.index.v1`.
-- Project graph bodies are stored in IndexedDB; old localStorage project bodies are migrated
-  on read. Restricted browsers fall back to localStorage and the editor reports save errors.
+- Project metadata index remains in localStorage: `athanoride.agents.projects.index.v2`.
+- Project graph bodies use IndexedDB database version 2. The upgrade recreates only the project store; a one-time marker limits cleanup of older project indexes/body keys. No old-project loaders or migrations remain. Restricted browsers fall back to localStorage and the editor reports save errors.
 - Marketplace snapshots are cached independently in IndexedDB and refreshed every 24 hours
   while the app is open.
 
@@ -65,6 +64,7 @@ Browser (Next.js)
                             ├─ GET  /api/v1/node-definitions
                             ├─ POST /api/v1/projects/validate
                             ├─ POST /api/v1/projects/execute
+                            ├─ POST /api/v1/projects/handoff
                             ├─ POST /api/v1/projects/export
                             ├─ POST /api/v1/compiler/generate
                             ├─ POST /api/v1/compiler/validate
@@ -99,3 +99,11 @@ Generated transforms are never executed on the API host interpreter — only in 
 - [Node catalog](./node-catalog.md)
 - [Development plan](./development-plan.md)
 - [ADRs](./decisions/README.md)
+
+## Shared workflow workspace
+
+Schema 2.0.0 contains task briefs, independent SME/engineering layouts, stage transitions, string task bindings, workflow input, and a concurrency limit. Component membership is explicit. All three tabs edit this same graph; role selection is a browser preference, not an access-control boundary. Undo/redo and autosave include workflow edits and deliberate optional-port omissions.
+
+Design validation checks briefs and workflow topology. Deployment validation also checks implementation bindings, catalog ports, policies, credentials, and executable coverage. Both profiles scan descriptive content and nested configuration for credentials without echoing matched values. Server export revalidates every submitted graph. Handoff returns a deterministic design ZIP; deployment formats include workflow.json and security-review.json.
+
+Exported workflow_scheduler.py is shared by local isolated-container and cluster process launchers. It runs each global stage with bounded concurrency, joins predecessors in sorted task-ID order, and substitutes successful dedicated recovery results. A failed stage waits for already-running peers within their worker deadlines and does not advance. Interactive CLI approvals share one deadline-aware lock. IDE task preview is non-executing. See [ADR 0012](./decisions/0012-three-role-workflow.md).

@@ -4,6 +4,7 @@
 "use client";
 
 import { create } from "zustand";
+import { useUiPreferencesStore } from "./ui-preferences-store";
 
 import {
   createProject,
@@ -40,6 +41,7 @@ export const useProjectLibraryStore = create<ProjectLibraryState>((set, get) => 
   },
 
   create: async (name) => {
+    useUiPreferencesStore.getState().setWorkspaceRole("sme");
     const graph = await createProject(name);
     get().refresh();
     return graph.project.id;

@@ -44,6 +44,17 @@ class NodeDefinitionsResponse(BaseModel):
 
 class ValidateProjectRequest(BaseModel):
     graph: ArchitectureGraph
+    profile: Literal["design", "deployment"] = "deployment"
+
+
+class HandoffRequest(BaseModel):
+    graph: ArchitectureGraph
+
+
+class HandoffResponse(BaseModel):
+    files: dict[str, str]
+    archive_base64: str = Field(alias="archiveBase64")
+    model_config = {"populate_by_name": True}
 
 
 class ValidateProjectResponse(BaseModel):

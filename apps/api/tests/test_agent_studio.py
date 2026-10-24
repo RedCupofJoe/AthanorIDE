@@ -34,8 +34,15 @@ def node(kind, nid=None, **config):
 
 
 def graph_dict():
-    return {
-        "schemaVersion": "1.0.0",
+    data = {
+        "schemaVersion": "2.0.0",
+        "workflow": {
+            "tasks": [],
+            "transitions": [],
+            "input": "",
+            "maxParallelTasks": 4,
+            "viewport": {"x": 0, "y": 0, "zoom": 1},
+        },
         "project": {
             "id": "agent-test",
             "name": "Agent Test",
@@ -89,6 +96,41 @@ def graph_dict():
         "validationResults": [],
         "viewport": {"x": 0, "y": 0, "zoom": 1},
     }
+
+    data["nodes"] = [n for n in data["nodes"] if n["id"] != "task"]
+    data["edges"] = [e for e in data["edges"] if e["sourceNodeId"] != "task"]
+    data["nodes"][0]["workflowTaskId"] = "agent.sandboxed"
+    data["nodes"][0]["instructionMode"] = "inherit"
+    data["workflow"] = {
+        "tasks": [
+            {
+                "id": "agent.sandboxed",
+                "name": "Research",
+                "color": "#2563eb",
+                "role": "Researcher",
+                "expectedTasks": "Find a fact",
+                "constraints": "Use approved tools",
+                "bounds": {"x": 0, "y": 0, "width": 320, "height": 300},
+                "engineeringBounds": {"x": 0, "y": 0, "width": 900, "height": 800},
+                "inputBinding": {"nodeId": "agent.sandboxed", "portId": "in-task"},
+                "outputBinding": {"nodeId": "agent.sandboxed", "portId": "out-result"},
+            }
+        ],
+        "transitions": [
+            {
+                "id": "start",
+                "sourceTaskId": None,
+                "targetTaskId": "agent.sandboxed",
+                "kind": "normal",
+                "stage": 1,
+                "recoveryDescription": "",
+            }
+        ],
+        "input": "find a fact",
+        "maxParallelTasks": 4,
+        "viewport": {"x": 0, "y": 0, "zoom": 1},
+    }
+    return data
 
 
 def graph():
@@ -185,9 +227,9 @@ def test_preview_never_invokes_a_runtime(monkeypatch):
         "subprocess.Popen", lambda *a, **kw: pytest.fail("preview launched a process")
     )
     result = execute_architecture_graph(graph())
-    step = next(s for s in result.steps if s.node_type == "agent.sandboxed")
+    step = next(s for s in result.steps if s.node_type == "workflow.task")
     assert step.status == "skipped"
-    assert "No model, tool, or MCP request" in step.message
+    assert "no models or tools called" in step.message
 
 
 @pytest.mark.asyncio

@@ -10,7 +10,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./schema/architecture-graph.v1.schema.json": "./schema/architecture-graph.v1.schema.json"
+    "./schema/architecture-graph.v2.schema.json": "./schema/architecture-graph.v2.schema.json"
   },
   "files": [
     "dist",

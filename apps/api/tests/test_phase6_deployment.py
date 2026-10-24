@@ -13,7 +13,7 @@ from athanor_api.validation import validate_architecture_graph
 
 
 def _base_document(contracts_root: Path) -> dict:
-    fixture = contracts_root / "fixtures" / "text-transform.v1.json"
+    fixture = contracts_root / "fixtures" / "text-transform.v2.json"
     document = json.loads(fixture.read_text(encoding="utf-8"))
     for node in document["nodes"]:
         if node["type"] == "foundation.python_transform":
@@ -185,7 +185,9 @@ def test_export_argo_cd_app_of_apps(contracts_root: Path) -> None:
     assert "deploy/argocd/root-app.yaml" in result.files
     assert "deploy/argocd/README.md" in result.files
     child_apps = [
-        path for path in result.files if path.startswith("deploy/argocd/apps/") and path.endswith("-app.yaml")
+        path
+        for path in result.files
+        if path.startswith("deploy/argocd/apps/") and path.endswith("-app.yaml")
     ]
     assert child_apps
     assert any(path.startswith("deploy/kubernetes/") for path in result.files)
@@ -222,7 +224,14 @@ def test_export_argo_cd_with_okd_points_children_at_okd(contracts_root: Path) ->
 def test_air_gapped_rejects_external_http() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": {
                 "id": "p1",
                 "name": "Air",
@@ -282,7 +291,14 @@ def test_air_gapped_rejects_external_http() -> None:
 def test_unknown_deployment_target() -> None:
     graph = ArchitectureGraph.model_validate(
         {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "2.0.0",
+            "workflow": {
+                "tasks": [],
+                "transitions": [],
+                "input": "",
+                "maxParallelTasks": 4,
+                "viewport": {"x": 0, "y": 0, "zoom": 1},
+            },
             "project": {
                 "id": "p1",
                 "name": "Bad",

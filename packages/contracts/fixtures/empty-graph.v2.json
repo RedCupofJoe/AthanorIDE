@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "2.0.0",
   "project": {
     "id": "proj-empty-001",
     "name": "Empty Project",
@@ -17,5 +17,16 @@
     "x": 0,
     "y": 0,
     "zoom": 1
+  },
+  "workflow": {
+    "tasks": [],
+    "transitions": [],
+    "input": "",
+    "maxParallelTasks": 4,
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
   }
 }

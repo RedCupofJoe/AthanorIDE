@@ -5,6 +5,9 @@
  */
 import { useValidationStore } from "@/store/validation-store";
 import { useSelectionStore } from "@/store/selection-store";
+import { taskFlowId } from "@/lib/workflow";
+import { transitionFlowId } from "@/components/workflow/WorkflowCanvas";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 import { cn } from "@/lib/cn";
 
 export function ValidationPanel() {
@@ -55,13 +58,17 @@ export function ValidationPanel() {
                 onClick={() => {
                   if (issue.nodeId) focusNode(issue.nodeId);
                   else if (issue.edgeId) focusEdge(issue.edgeId);
+                  else if (issue.taskId) focusNode(taskFlowId(issue.taskId));
+                  else if (issue.transitionId) { useUiPreferencesStore.getState().setWorkspaceRole("sme"); focusEdge(transitionFlowId(issue.transitionId)); }
                 }}
-                disabled={!issue.nodeId && !issue.edgeId}
+                disabled={!issue.nodeId && !issue.edgeId && !issue.taskId && !issue.transitionId}
               >
                 <span className="font-medium uppercase tracking-wide text-xs">
                   {issue.severity} · {issue.code}
                 </span>
                 <span className="mt-1 block">{issue.message}</span>
+                {issue.portId && <span className="block text-xs">Port: {issue.portId}</span>}
+                {issue.fieldPath && <span className="block break-all text-xs">{issue.fieldPath}</span>}
                 {issue.suggestedAction && (
                   <span className="mt-1 block text-xs text-[var(--athanor-slate)]">
                     Suggested: {issue.suggestedAction}

@@ -6,7 +6,7 @@ Canonical architecture-graph schema and TypeScript types for AthanorIDE.
 
 | Artifact | Purpose |
 | --- | --- |
-| `schema/architecture-graph.v1.schema.json` | JSON Schema source of truth |
+| `schema/architecture-graph.v2.schema.json` | JSON Schema source of truth |
 | `src/index.ts` | Zod schemas, TS types, `createEmptyGraph`, `parseArchitectureGraph` |
 | `src/compatibility.ts` | Port contract compatibility (`STRING`↔`STRING`, `ANY`, …) |
 | `fixtures/` | Golden graphs for tests and examples |
@@ -34,7 +34,7 @@ pnpm --filter @athanor/contracts build
 pnpm --filter @athanor/contracts test
 ```
 
-Schema migrations notes: [migrations/README.md](./migrations/README.md).
+Schema 2.0.0 requires `workflow`. Older imports are rejected rather than migrated. Keep JSON Schema, Zod, Pydantic, and shared golden fixtures aligned. See [ADR 0012](../../docs/decisions/0012-three-role-workflow.md).
 
 ## Related ADR
 

@@ -1,4 +1,4 @@
-/** IndexedDB project bodies with a small localStorage index and legacy migration. */
+/** IndexedDB project bodies with a small localStorage index and a one-time project-only reset. */
 import {
   ArchitectureGraphSchema,
   createEmptyGraph,
@@ -6,10 +6,10 @@ import {
   parseArchitectureGraph,
 } from "@athanor/contracts";
 
-export const PROJECT_INDEX_KEY = "athanoride.agents.projects.index.v1";
-const LEGACY_BODY_PREFIX = "athanoride.agents.project.";
+export const PROJECT_INDEX_KEY = "athanoride.agents.projects.index.v2";
+const BODY_PREFIX = "athanoride.agents.project.v2.";
 const DATABASE_NAME = "athanoride-project-library";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const STORE_NAME = "projects";
 
 export type ProjectSummary = {
@@ -19,25 +19,36 @@ export type ProjectSummary = {
   updatedAt: string;
 };
 
-type ProjectIndex = { version: 1; activeId: string | null; entries: ProjectSummary[] };
+type ProjectIndex = { version: 2; activeId: string | null; entries: ProjectSummary[] };
 
 function bodyKey(id: string): string {
-  return `${LEGACY_BODY_PREFIX}${id}.v1`;
+  return `${BODY_PREFIX}${id}`;
 }
 
 function emptyIndex(): ProjectIndex {
-  return { version: 1, activeId: null, entries: [] };
+  return { version: 2, activeId: null, entries: [] };
+}
+
+/** Clear only obsolete project keys, once; templates, preferences and vault are independent. */
+export function resetOldProjectIndex(): void {
+  if (typeof window === "undefined" || window.localStorage.getItem("athanoride.project-reset.v2")) return;
+  const keys = Array.from({ length: window.localStorage.length }, (_, i) => window.localStorage.key(i));
+  for (const key of keys) {
+    if (key && (key === "athanoride.agents.projects.index.v1" || key === "athanoride.projects.index.v1" || key === "athanoride.project.v1" || /^athanoride\.(?:agents\.)?project\..+\.v1$/.test(key))) window.localStorage.removeItem(key);
+  }
+  window.localStorage.setItem("athanoride.project-reset.v2", "done");
 }
 
 function readIndexRaw(): ProjectIndex {
   if (typeof window === "undefined") return emptyIndex();
+  resetOldProjectIndex();
   try {
     const raw = window.localStorage.getItem(PROJECT_INDEX_KEY);
     if (!raw) return emptyIndex();
     const parsed = JSON.parse(raw) as ProjectIndex;
-    if (parsed.version !== 1 || !Array.isArray(parsed.entries)) return emptyIndex();
+    if (parsed.version !== 2 || !Array.isArray(parsed.entries)) return emptyIndex();
     return {
-      version: 1,
+      version: 2,
       activeId: typeof parsed.activeId === "string" ? parsed.activeId : null,
       entries: parsed.entries.filter((entry) => entry && typeof entry.id === "string"
         && typeof entry.name === "string" && typeof entry.createdAt === "string"
@@ -58,13 +69,20 @@ function openDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === "undefined") return Promise.reject(new Error("IndexedDB is unavailable"));
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+    let blocked = false;
     request.onupgradeneeded = () => {
+      if (request.result.objectStoreNames.contains(STORE_NAME)) request.result.deleteObjectStore(STORE_NAME);
       if (!request.result.objectStoreNames.contains(STORE_NAME)) {
         request.result.createObjectStore(STORE_NAME, { keyPath: "project.id" });
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      if (blocked) { request.result.close(); return; }
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
     request.onerror = () => reject(request.error ?? new Error("Could not open project storage"));
+    request.onblocked = () => { blocked = true; reject(new Error("Close older AthanorIDE tabs to reset project storage.")); };
   });
 }
 
@@ -90,38 +108,6 @@ function summaryFromGraph(graph: ArchitectureGraph): ProjectSummary {
     createdAt: graph.project.createdAt, updatedAt: graph.project.updatedAt };
 }
 
-/** Upgrade port snapshots written before sandbox policies and runtimes had distinct contracts. */
-export function migrateSandboxRuntimePorts(input: unknown): unknown {
-  if (!input || typeof input !== "object" || !Array.isArray((input as { nodes?: unknown }).nodes)) return input;
-  const graph = input as { nodes: Array<{ type?: unknown; inputs?: unknown; outputs?: unknown }> };
-  return {
-    ...graph,
-    nodes: graph.nodes.map((node) => {
-      const type = typeof node.type === "string" ? node.type : "";
-      const ports = (value: unknown, names: Set<string>) => Array.isArray(value)
-        ? value.map((port) => {
-          if (!port || typeof port !== "object") return port;
-          const record = port as { name?: unknown; contractType?: unknown };
-          return record.name && names.has(String(record.name)) && record.contractType === "SANDBOX_POLICY"
-            ? { ...record, contractType: "SANDBOX_RUNTIME" }
-            : port;
-        })
-        : value;
-      const runtimeOutputs = type.startsWith("sandbox.") && type !== "sandbox.policy"
-        ? new Set(["sandbox"])
-        : new Set<string>();
-      const runtimeInputs = type === "agent.sandboxed" || type.startsWith("harness.") || type === "mcp.server"
-        ? new Set(["sandbox"])
-        : new Set<string>();
-      return {
-        ...node,
-        inputs: ports(node.inputs, runtimeInputs),
-        outputs: ports(node.outputs, runtimeOutputs),
-      };
-    }),
-  };
-}
-
 function upsertSummary(index: ProjectIndex, summary: ProjectSummary): ProjectIndex {
   const entries = [summary, ...index.entries.filter((entry) => entry.id !== summary.id)]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -136,18 +122,17 @@ export function setActiveProjectId(id: string | null): void {
 
 export async function loadProjectGraph(id: string): Promise<ArchitectureGraph | null> {
   if (typeof window === "undefined") return null;
+  resetOldProjectIndex();
   try {
     const stored = await idbRequest<ArchitectureGraph | undefined>("readonly", (store) => store.get(id));
-    if (stored) return parseArchitectureGraph(migrateSandboxRuntimePorts(stored));
+    if (stored) return parseArchitectureGraph(stored);
   } catch {
-    // Fall back to legacy storage so browser privacy settings do not make projects disappear.
+    // Current-schema fallback for restricted browser contexts.
   }
   try {
     const raw = window.localStorage.getItem(bodyKey(id));
     if (!raw) return null;
-    const graph = parseArchitectureGraph(migrateSandboxRuntimePorts(JSON.parse(raw)));
-    await saveProjectGraph(graph);
-    window.localStorage.removeItem(bodyKey(id));
+    const graph = parseArchitectureGraph(JSON.parse(raw));
     return graph;
   } catch {
     return null;
@@ -186,11 +171,11 @@ export async function renameProject(id: string, name: string): Promise<Architect
 
 export async function deleteProject(id: string): Promise<void> {
   if (typeof window === "undefined") return;
-  try { await idbRequest("readwrite", (store) => store.delete(id)); } catch { /* remove legacy copy below */ }
+  try { await idbRequest("readwrite", (store) => store.delete(id)); } catch { /* remove current localStorage fallback below */ }
   window.localStorage.removeItem(bodyKey(id));
   const index = readIndexRaw();
   const entries = index.entries.filter((entry) => entry.id !== id);
-  writeIndex({ version: 1, activeId: index.activeId === id ? (entries[0]?.id ?? null) : index.activeId, entries });
+  writeIndex({ version: 2, activeId: index.activeId === id ? (entries[0]?.id ?? null) : index.activeId, entries });
 }
 
 export async function importProjectIntoLibrary(graph: ArchitectureGraph): Promise<ArchitectureGraph> {

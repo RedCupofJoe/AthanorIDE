@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ArchitectureGraphSchema,
+  createEmptyWorkflow,
   SCHEMA_VERSION,
   parseArchitectureGraph,
 } from "./index.js";
@@ -19,38 +20,41 @@ function loadJson(relativePath: string): unknown {
 }
 
 describe("architecture graph contracts", () => {
-  const schema = loadJson("schema/architecture-graph.v1.schema.json");
+  const schema = loadJson("schema/architecture-graph.v2.schema.json");
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   addFormats(ajv);
   const validate = ajv.compile(schema);
 
-  it("exports schema version 1.0.0", () => {
-    expect(SCHEMA_VERSION).toBe("1.0.0");
+  it("exports schema version 2.0.0", () => {
+    expect(SCHEMA_VERSION).toBe("2.0.0");
   });
 
-  it.each(["fixtures/empty-graph.v1.json", "fixtures/text-transform.v1.json"])(
-    "accepts golden fixture %s via JSON Schema and Zod",
-    (fixturePath) => {
-      const document = loadJson(fixturePath);
-      expect(validate(document)).toBe(true);
-      const parsed = parseArchitectureGraph(document);
-      expect(parsed.schemaVersion).toBe("1.0.0");
-      expect(ArchitectureGraphSchema.safeParse(document).success).toBe(true);
-    },
-  );
+  it.each([
+    "fixtures/empty-graph.v2.json",
+    "fixtures/text-transform.v2.json",
+    "fixtures/workflow-design.v2.json",
+  ])("accepts golden fixture %s via JSON Schema and Zod", (fixturePath) => {
+    const document = loadJson(fixturePath);
+    expect(validate(document)).toBe(true);
+    const parsed = parseArchitectureGraph(document);
+    expect(parsed.schemaVersion).toBe("2.0.0");
+    expect(ArchitectureGraphSchema.safeParse(document).success).toBe(true);
+  });
 
   it("rejects an invalid schema version", () => {
-    const document = loadJson("fixtures/empty-graph.v1.json") as {
+    const document = loadJson("fixtures/empty-graph.v2.json") as {
       schemaVersion: string;
     };
     document.schemaVersion = "0.0.1";
     expect(validate(document)).toBe(false);
+    expect(() => parseArchitectureGraph(document)).toThrow(/Unsupported/);
     expect(ArchitectureGraphSchema.safeParse(document).success).toBe(false);
   });
 
   it("defaults missing infrastructureTokens to an empty array", () => {
     const document = {
       schemaVersion: SCHEMA_VERSION,
+      workflow: createEmptyWorkflow(),
       project: {
         id: "p1",
         name: "Demo",
