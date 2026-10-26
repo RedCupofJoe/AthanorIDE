@@ -22,6 +22,12 @@ A local-first graphical workbench for designing sandboxed agents, connecting age
 
 *The **Parallel workflow + recovery** starter shows two stage-1 tasks, a stage-2 join, and a dedicated A1 recovery handler.*
 
+See the [screenshot gallery](docs/screenshots.md) for all three role views, task boundaries, inherited instructions, and the pruning preview.
+
+| AI Engineer · grouped implementation | AgentOpSec Engineer · pruning preview |
+| --- | --- |
+| [![AI Engineer with a task group, connected components, and string input/result boundaries](docs/assets/ai-engineer-workspace.jpg)](docs/screenshots.md#ai-engineer) | [![AgentOpSec Engineer highlighting security controls and previewing unused optional ports](docs/assets/agentopsec-pruning.jpg)](docs/screenshots.md#pruning-preview) |
+
 - **Staged execution and recovery:** exported workflows run stage peers concurrently (default limit: four), wait at stage barriers, and combine predecessor results deterministically. A successful recovery replaces a task that failed, timed out, or was rejected by a guardrail.
 - **Design-to-build handoff:** download a deterministic ZIP with `workflow.json`, a readable `build-brief.md`, and an importable `project-scaffold.json` for an engineer or external building agent.
 - **Reviewable deployment artifacts:** separate design/deployment validation, location-based credential findings, and server-side export validation. Code, container, Helm, OpenShift, npm, and Makefile exports include the workflow specification and `security-review.json`.
@@ -34,6 +40,7 @@ All tabs are available to everyone. **Run preview** displays planned stages and 
 ## Contents
 
 - [Three-role workflow workspace](#three-role-workflow-workspace)
+- [Screenshot gallery](docs/screenshots.md)
 - [Change notes](CHANGELOG.md)
 - [What you can build](#what-you-can-build)
 - [Install and start](#install-and-start)
@@ -420,6 +427,7 @@ Core API routes are `GET /api/v1/health`, `GET /api/v1/node-definitions`, and `P
 | Reference | Scope |
 | --- | --- |
 | [Three-role user guide](docs/user-guide.md) | SME design, grouped implementation, security review, pruning, and workflow execution |
+| [Screenshot gallery](docs/screenshots.md) | All three role views, instruction inheritance, and pruning previews |
 | [Change notes](CHANGELOG.md) | New features and the schema-2.0.0 project storage break |
 | [Starter examples](examples/README.md) | Parallel tasks, join/recovery, sandboxed agents, harnesses, and MCP servers |
 | [Agent studio guide](docs/agent-studio.md) | Current agent/MCP behavior, runtime boundaries, and upstream design references |

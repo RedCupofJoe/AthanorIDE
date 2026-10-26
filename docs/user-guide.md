@@ -1,5 +1,7 @@
 # AthanorIDE user guide
 
+See the [screenshot gallery](screenshots.md) for the three role views, task boundaries, instruction review, and pruning previews.
+
 ## Projects and role tabs
 
 Projects autosave locally in IndexedDB, with a localStorage fallback where IndexedDB is unavailable. Schema **2.0.0** starts a fresh project library: the first upgrade removes older saved projects and project indexes. Later visits preserve new projects. Templates, preferences, marketplace data, and the encrypted local vault are unaffected. Older JSON imports are rejected with an unsupported-version message.
