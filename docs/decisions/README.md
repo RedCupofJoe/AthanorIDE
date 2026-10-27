@@ -18,6 +18,7 @@ ADRs document durable technical decisions for AthanorIDE.
 | [0010](./0010-big-blocks.md) | Big Blocks Opinionated Composites | Accepted |
 | [0011](./0011-local-secrets-vault.md) | Local Secrets Vault | Accepted |
 | [0012](./0012-three-role-workflow.md) | Three-role Workflow and Fresh Project Model | Accepted |
+| [0013](./0013-local-assistant.md) | Opt-in Local Assistant and Project GraphRAG | Accepted |
 
 ## Template
 

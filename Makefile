@@ -1,4 +1,4 @@
-.PHONY: install install-macos bootstrap-tools dev lint typecheck test podman-up podman-down openshift-ide-apply clean help
+.PHONY: install install-macos bootstrap-tools dev stop lint typecheck test podman-up podman-down openshift-ide-apply clean help
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 TOOLS_DIR := $(ROOT_DIR)/.tools
@@ -12,6 +12,7 @@ help:
 	@echo "  make install       Bootstrap tools and install dependencies"
 	@echo "  make install-macos Guided macOS setup for Intel and Apple Silicon Macs"
 	@echo "  make dev           Run API + web for local development"
+	@echo "  make stop          Stop API + web processes from this checkout"
 	@echo "  make lint          Lint TypeScript and Python"
 	@echo "  make typecheck     Type-check TypeScript and Python"
 	@echo "  make test          Run frontend and backend tests"
@@ -40,6 +41,9 @@ dev: bootstrap-tools
 	@$(PNPM) --filter @athanor/node-definitions build
 	@$(PNPM) --filter @athanor/ui build
 	@bash "$(ROOT_DIR)/scripts/dev.sh"
+
+stop:
+	@bash "$(ROOT_DIR)/scripts/stop.sh"
 
 lint: bootstrap-tools
 	@$(PNPM) lint
