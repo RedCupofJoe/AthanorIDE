@@ -13,9 +13,13 @@ type UiPreferencesState = {
   setWorkspaceRole: (role: WorkspaceRole) => void;
   paletteCompact: boolean;
   lowResourceMode: boolean;
+  assistantEndpoint: string;
+  assistantModel: string;
   setPaletteCompact: (compact: boolean) => void;
   togglePaletteCompact: () => void;
   setLowResourceMode: (enabled: boolean) => void;
+  setAssistantEndpoint: (assistantEndpoint: string) => void;
+  setAssistantModel: (assistantModel: string) => void;
 };
 
 const memoryStorage = () => {
@@ -38,8 +42,12 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
       setWorkspaceRole: (workspaceRole) => set({ workspaceRole }),
       paletteCompact: false,
       lowResourceMode: false,
+      assistantEndpoint: "",
+      assistantModel: "assistant",
       setPaletteCompact: (paletteCompact) => set({ paletteCompact }),
       setLowResourceMode: (lowResourceMode) => set({ lowResourceMode }),
+      setAssistantEndpoint: (assistantEndpoint) => set({ assistantEndpoint }),
+      setAssistantModel: (assistantModel) => set({ assistantModel }),
       togglePaletteCompact: () =>
         set((state) => ({ paletteCompact: !state.paletteCompact })),
     }),

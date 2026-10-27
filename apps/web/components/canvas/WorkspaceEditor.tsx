@@ -19,6 +19,7 @@ import { useSelectionStore } from "@/store/selection-store";
 import { validateCurrentProject } from "@/lib/validate";
 import { useEffect, useState } from "react";
 
+import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 import { ArchitectureCanvas } from "@/components/canvas/ArchitectureCanvas";
 import { EditorToolbar } from "@/components/canvas/EditorToolbar";
 import { ExecutionPanel } from "@/components/execution/ExecutionPanel";
@@ -28,6 +29,7 @@ import { LocalVaultPanel } from "@/components/inspector/LocalVaultPanel";
 import { NodeInspector } from "@/components/inspector/NodeInspector";
 import { NodePalette } from "@/components/sidebar/NodePalette";
 import { ValidationPanel } from "@/components/validation/ValidationPanel";
+import { refreshProjectIndex } from "@/lib/graphrag";
 import { useProjectStore } from "@/store/project-store";
 
 type WorkspaceEditorProps = {
@@ -62,6 +64,7 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
   const hydrated = useProjectStore((state) => state.hydrated);
   const [missing, setMissing] = useState(false);
   const [rightPanel, setRightPanel] = useState<RightPanel>("inspector");
+  const [rightView, setRightView] = useState<"details" | "assistant">("details");
   const [mobilePanel, setMobilePanel] = useState<
     "palette" | "inspector" | null
   >(null);
@@ -70,6 +73,15 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
     setRightPanel("inspector");
     setMobilePanel(null);
   }, [role]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refreshProjectIndex(graph).catch(() => {
+        // Indexing waits until the local embedding model is available.
+      });
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [graph]);
 
   useEffect(() => {
     const previousHtmlOverflow = document.documentElement.style.overflow;
@@ -181,18 +193,44 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
             <LocalVaultPanel open onClose={() => setRightPanel("inspector")} />
           ) : (
             <>
-              <DeleteConfirmationPanel />
-              <div className="min-h-0 flex-1">
-                {role === "sme" || workflowSelection ? (
-                  <WorkflowInspector />
-                ) : (
-                  <>
-                    <ComponentWorkflowControls />
-                    <NodeInspector />
-                    <WorkflowInspector />
-                  </>
-                )}
+              <div className="flex gap-1 border-b border-[var(--athanor-mist)] p-2" role="tablist" aria-label="Right column">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={rightView === "details"}
+                  className={`rounded px-2 py-1 text-xs ${rightView === "details" ? "bg-[var(--athanor-ink)] text-white" : "border border-[var(--athanor-mist)]"}`}
+                  onClick={() => setRightView("details")}
+                >
+                  Details
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={rightView === "assistant"}
+                  className={`rounded px-2 py-1 text-xs ${rightView === "assistant" ? "bg-[var(--athanor-ink)] text-white" : "border border-[var(--athanor-mist)]"}`}
+                  onClick={() => setRightView("assistant")}
+                >
+                  Assistant
+                </button>
               </div>
+              {rightView === "assistant" ? (
+                <AssistantPanel />
+              ) : (
+                <>
+                  <DeleteConfirmationPanel />
+                  <div className="min-h-0 flex-1">
+                    {role === "sme" || workflowSelection ? (
+                      <WorkflowInspector />
+                    ) : (
+                      <>
+                        <ComponentWorkflowControls />
+                        <NodeInspector />
+                        <WorkflowInspector />
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

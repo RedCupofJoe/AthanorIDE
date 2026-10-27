@@ -90,7 +90,7 @@ The IDE runs locally in your browser; this installs the development services and
 make dev
 ```
 
-The installer detects Apple Silicon (`arm64`) or Intel (`x86_64`). If Node.js 20+ or a native Python 3.12+ is missing, it offers to install those dependencies with Homebrew. An x86_64 Python on Apple Silicon, such as an Intel Anaconda install, is not used: current Command Line Tools cannot link those builds. If Make is missing, install Command Line Tools with `xcode-select --install` and run the installer again. It then runs the same `make install` used on Linux. Open [localhost:3000](http://localhost:3000); stop the services with Ctrl+C. The default development workflow does not require Podman. Use `make install-macos` as an equivalent entry point when Make is already available.
+The installer detects Apple Silicon (`arm64`) or Intel (`x86_64`). If Node.js 20+ or a native Python 3.12+ is missing, it offers to install those dependencies with Homebrew. An x86_64 Python on Apple Silicon, such as an Intel Anaconda install, is not used: current Command Line Tools cannot link those builds. If Make is missing, install Command Line Tools with `xcode-select --install` and run the installer again. It then runs the same `make install` used on Linux. Open [localhost:3000](http://localhost:3000). Stop the services with Ctrl+C, or run `make stop` when that terminal is gone. The default development workflow does not require Podman. Use `make install-macos` as an equivalent entry point when Make is already available.
 
 ### Local development
 
@@ -101,7 +101,7 @@ make install
 make dev
 ```
 
-`make install` installs workspace dependencies, creates the API virtual environment, and builds the shared TypeScript packages. `make dev` starts both the API and frontend. Stop it with Ctrl+C.
+`make install` installs workspace dependencies, creates the API virtual environment, and builds the shared TypeScript packages. `make dev` starts both the API and frontend. Stop that terminal with Ctrl+C, or run `make stop` from the repository root. `make stop` stops this checkout's API and web processes on any port. It also stops an Athanor API or Next dev server listening on ports 8000 and 3000, including one started from another checkout. A different program on those ports is left running.
 
 | Address | Purpose |
 | --- | --- |
@@ -352,7 +352,7 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8010 \
   pnpm --filter @athanor/web exec next dev --hostname 127.0.0.1 --port 3010
 ```
 
-Open `http://127.0.0.1:3010`. Setting only `NEXT_PUBLIC_API_BASE_URL` does not move the API listener. The `ATHANOR_API_PORT`/`ATHANOR_WEB_PORT` variables apply only to the Podman launcher mappings; the stock production frontend embeds its public API URL during build, so runtime environment changes alone do not configure an alternative API address. Use the default container ports or customize the image build and API CORS together.
+Open `http://127.0.0.1:3010`. `make stop` stops those processes too. Setting only `NEXT_PUBLIC_API_BASE_URL` does not move the API listener. The `ATHANOR_API_PORT`/`ATHANOR_WEB_PORT` variables apply only to the Podman launcher mappings; the stock production frontend embeds its public API URL during build, so runtime environment changes alone do not configure an alternative API address. Use the default container ports or customize the image build and API CORS together.
 
 ### Common issues
 
@@ -391,6 +391,7 @@ Run these commands from the **IDE repository root**:
 ```bash
 make install          # Install dependencies and build shared packages
 make dev              # Start API and frontend
+make stop             # Stop API and frontend processes from this checkout
 make lint             # JavaScript lint plus Python Ruff checks/format check
 make typecheck        # TypeScript and mypy
 make test             # Vitest and Pytest

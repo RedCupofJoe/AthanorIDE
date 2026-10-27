@@ -18,7 +18,9 @@ Connect the Start marker's right anchor to a task's left anchor. Connect task an
 
 The overview holds the workflow's string input and maximum parallel tasks (default 4, range 1–32). It lists planned stages and recovery routes. Search focuses tasks; Fit View frames the complete design. Ctrl/Cmd+D clones the selected brief; Delete/Backspace removes the selection; Ctrl/Cmd+Z and Shift+Z undo/redo; Escape cancels drawing or selection.
 
-**Validate** checks the design without requiring implementation components. **Export build brief** calls `POST /api/v1/projects/handoff` and downloads a deterministic ZIP containing `workflow.json`, readable `build-brief.md`, and an importable schema-2.0.0 `project-scaffold.json`. Give it to an external building agent or an engineer. AthanorIDE does not invoke a building agent or send the brief externally. Credential findings must be resolved before handoff.
+**Validate** checks the design without requiring implementation components. **Export build brief** calls `POST /api/v1/projects/handoff` and downloads a deterministic ZIP containing `workflow.json`, readable `build-brief.md`, and an importable schema-2.0.0 `project-scaffold.json`. Give it to an external building agent or an engineer. Credential findings must be resolved before handoff.
+
+The right column has **Details** and **Assistant**. After every task has a role and expected tasks, **Build draft** sends those briefs and transitions to the model endpoint saved with the gear under search. Tasks that already have components are left unchanged. The draft is one Undo. The workspace then opens as AI Engineer. The model token is not included in the brief.
 
 ## AI Engineer
 
@@ -28,6 +30,8 @@ Select a task group to choose **Workflow input boundary** and **Task result boun
 
 Agents and harnesses inherit the latest SME brief by default. **Override instructions** enables a deliberate replacement, edited and applied through the component inspector. **Restore SME instructions** returns to inheritance. Assigning an already-configured component preserves non-default custom instructions as a flagged override. Later SME edits immediately affect inherited instructions. Harness requests include the effective instructions alongside their task input.
 
+**Assistant** answers questions about this project's tasks, components, and non-secret configuration. The answer lists the retrieved component names. The question and those passages are the only project text sent to the model.
+
 ## AgentOpSec Engineer
 
 The engineering layout highlights guardrails, sandbox policies, credential/authentication references, suspected embedded credentials, unused ports, and instruction overrides. Selecting an agent shows the SME brief beside its effective instructions. Validation findings navigate to the affected component, task, or transition and include field/port locations where relevant.
@@ -35,6 +39,14 @@ The engineering layout highlights guardrails, sandbox policies, credential/authe
 **Prune unused ports** previews the exact optional ports to remove from a component's JSON. Required ports, connected ports, task boundaries, and macro bindings are protected. **Restore optional ports** restores deliberate omissions from the current catalog. **Prune disconnected components** on a task previews only fully disconnected members; boundaries, macro/portal references, and shared resources survive. Apply the preview as one undoable operation. The graph is revalidated after pruning; editing it invalidates old validation results.
 
 Instruction overrides are review warnings and do not require approval. Missing required connections, invalid policies, invalid task bindings, and detected embedded credentials block deployment export. Scanning includes nested configuration, metadata, task briefs, overrides, and exported descriptions; findings identify locations without repeating credential values. Use named environment/secret references and the existing Local vault/Infra tokens tools to manage credentials.
+
+**Assistant** uses the same project index as the AI Engineer view, so deployment questions can follow a component and its immediate connections. Secret-like text is redacted before it is indexed or sent.
+
+## Assistant model settings
+
+The gear under the search field saves the chat-completions URL and model ID as a browser preference. They are not part of the project and are not exported. The token field is write-only: Save stores `ATHANOR_ASSISTANT_TOKEN` in the local vault and clears the field. Unlock the vault from **Local vault** before saving a token. A locked vault stops the assistant before any model request.
+
+The API also serves these catalog and draft tools at `http://127.0.0.1:8000/assistant/mcp` for a local MCP client. `list_blocks` and `describe_block` expose catalog ports and required fields. `draft_architecture` uses the same validation as **Build draft**. Placeholder endpoints and secret names are allowed; secret values are rejected.
 
 ## Preview, export, and execution
 

@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from functools import partial
 
 import anyio
@@ -13,8 +14,12 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.applications import Starlette
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Mount
 
+from athanor_api.assistant.mcp_server import build_assistant_http_app
+from athanor_api.assistant.routes import router as assistant_router
 from athanor_api.catalog import FOUNDATION_NODE_SUMMARIES
 from athanor_api.compiler import compile_transformation, validate_compiled_source
 from athanor_api.execution import execute_architecture_graph
@@ -79,12 +84,37 @@ async def run_cpu_bound[ResultT](
         CPU_WORK_LIMITER.release()
 
 
+def _install_assistant_mount(parent: FastAPI) -> None:
+    parent.router.routes = [
+        route
+        for route in parent.router.routes
+        if not (isinstance(route, Mount) and route.path == "/assistant")
+    ]
+    parent.mount("/assistant", build_assistant_http_app())
+
+
+@asynccontextmanager
+async def app_lifespan(parent: FastAPI) -> AsyncIterator[None]:
+    _install_assistant_mount(parent)
+    mounted = next(
+        route
+        for route in parent.router.routes
+        if isinstance(route, Mount) and route.path == "/assistant"
+    )
+    http_app = mounted.app
+    if not isinstance(http_app, Starlette):
+        raise RuntimeError("Assistant MCP mount is not a Starlette app")
+    async with http_app.router.lifespan_context(http_app):
+        yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.api_version,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=app_lifespan,
 )
 
 app.add_middleware(
@@ -96,6 +126,8 @@ app.add_middleware(
 )
 
 app.include_router(vault_router)
+app.include_router(assistant_router)
+_install_assistant_mount(app)
 
 
 @app.get("/api/v1/marketplace/topics", response_model=list[MarketplaceTopic], tags=["marketplace"])

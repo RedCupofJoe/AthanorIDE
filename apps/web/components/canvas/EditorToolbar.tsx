@@ -18,6 +18,7 @@ import {
   Redo2,
   Save,
   Search,
+  Settings,
   Shield,
   ShieldCheck,
   Undo2,
@@ -41,6 +42,7 @@ import {
 import { useExecutionStore } from "@/store/execution-store";
 import { useSelectionStore } from "@/store/selection-store";
 import { useValidationStore } from "@/store/validation-store";
+import { AssistantSettings } from "@/components/assistant/AssistantSettings";
 import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 
 type EditorToolbarProps = {
@@ -63,6 +65,7 @@ export function EditorToolbar({
   const [exportFormat, setExportFormat] =
     useState<NonNullable<ExportOptions["exportFormat"]>>("code");
   const [searchQuery, setSearchQuery] = useState("");
+  const [assistantSettingsOpen, setAssistantSettingsOpen] = useState(false);
   const graph = useProjectStore((state) => state.graph);
   const setProjectName = useProjectStore((state) => state.setProjectName);
   const setExportConfiguration = useProjectStore(
@@ -211,6 +214,21 @@ export function EditorToolbar({
             }}
           />
         </div>
+        <div className="mt-1 flex justify-end">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs"
+            aria-label="Assistant model settings"
+            aria-expanded={assistantSettingsOpen}
+            onClick={() => setAssistantSettingsOpen((open) => !open)}
+          >
+            <Settings className="size-3.5" />
+            Assistant
+          </button>
+        </div>
+        {assistantSettingsOpen && onOpenLocalVault && (
+          <AssistantSettings onOpenVault={onOpenLocalVault} />
+        )}
         {searchQuery.trim() && (
           <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded border border-[var(--athanor-mist)] bg-white text-sm shadow">
             {searchHits.length === 0 ? (
