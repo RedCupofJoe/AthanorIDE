@@ -15,11 +15,13 @@ type UiPreferencesState = {
   lowResourceMode: boolean;
   assistantEndpoint: string;
   assistantModel: string;
+  assistantUseToken: boolean;
   setPaletteCompact: (compact: boolean) => void;
   togglePaletteCompact: () => void;
   setLowResourceMode: (enabled: boolean) => void;
   setAssistantEndpoint: (assistantEndpoint: string) => void;
   setAssistantModel: (assistantModel: string) => void;
+  setAssistantUseToken: (assistantUseToken: boolean) => void;
 };
 
 const memoryStorage = () => {
@@ -44,10 +46,12 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
       lowResourceMode: false,
       assistantEndpoint: "",
       assistantModel: "assistant",
+      assistantUseToken: true,
       setPaletteCompact: (paletteCompact) => set({ paletteCompact }),
       setLowResourceMode: (lowResourceMode) => set({ lowResourceMode }),
       setAssistantEndpoint: (assistantEndpoint) => set({ assistantEndpoint }),
       setAssistantModel: (assistantModel) => set({ assistantModel }),
+      setAssistantUseToken: (assistantUseToken) => set({ assistantUseToken }),
       togglePaletteCompact: () =>
         set((state) => ({ paletteCompact: !state.paletteCompact })),
     }),

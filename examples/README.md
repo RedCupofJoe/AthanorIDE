@@ -8,12 +8,23 @@ On the home page (`/`), use **Examples** to create:
 
 | Example | What it demonstrates |
 | --- | --- |
+| Adaptive research · 4 / 7 / 5 blocks | Different task implementations: prompt preparation, API/MCP evidence gathering, and independent review with final formatting |
 | Parallel workflow + recovery | Two stage-1 tasks, a stage-2 join, and a dedicated A1 recovery handler, each with a matching implementation group |
 | Sandboxed agent | One task with a bounded agent, model, API tool, sandbox, and result boundary |
 | Agent harness | One task implemented by a configurable deployed harness endpoint and sandboxed adapter |
 | MCP server | Tools, resources, and prompts exposed through MCP Server Builder; an empty task workflow retains the server entrypoint |
 
 Builders live in [apps/web/lib/example-projects.ts](../apps/web/lib/example-projects.ts). Configure real endpoints, model IDs, network policy, and credential environment-variable names before running exported code.
+
+## Explore different block counts
+
+Open **Adaptive research · 4 / 7 / 5 blocks** and switch to **AI Engineer**:
+
+- **Scope the request — 4 blocks:** input prompt template, agent, model, and sandbox. The task input binds to the template; its rendered text feeds the agent.
+- **Gather evidence — 7 blocks:** agent, model, sandbox, guardrails, document-search API, document-read API, and a requirements-registry MCP connection. The agent chooses which tools to call for each question.
+- **Review and deliver — 5 blocks:** agent, model, sandbox, guardrails, and final report template. The task result binds to the formatter, so the exported workflow returns the formatted report.
+
+Every component contributes to its task's result. Block counts are intentionally different in this example; the canvas does not add or remove blocks at runtime. Task results pass through the serial workflow to **End**. Tool URLs under `example.test` are placeholders, and the model address must be reachable from the worker container. Configure services before execution; **Run preview** does not contact them.
 
 ## Explore parallel tasks and recovery
 

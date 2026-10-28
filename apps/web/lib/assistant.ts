@@ -8,12 +8,29 @@ import {
   type ArchitectureGraph,
   type ArchitectureNode,
   type WorkflowTask,
+  type WorkflowTransition,
 } from "@athanor/contracts";
 import { createNodeFromDefinition, getNodeDefinition } from "@athanor/node-definitions";
+import { z } from "zod";
 
 import { getApiBaseUrl } from "@/lib/api";
 
 export const ASSISTANT_TOKEN_NAME = "ATHANOR_ASSISTANT_TOKEN";
+
+const EngineeringTaskPlanSchema = z.object({
+  taskId: z.string(), name: z.string(), approach: z.string(),
+  inputContract: z.string(), outputContract: z.string(),
+  acceptanceChecks: z.array(z.string()), connectedTools: z.array(z.string()),
+  setupRequirements: z.array(z.string()),
+});
+export type EngineeringTaskPlan = z.infer<typeof EngineeringTaskPlanSchema>;
+
+export function engineeringPlans(graph: ArchitectureGraph): EngineeringTaskPlan[] {
+  return graph.nodes.flatMap((node) => {
+    const result = EngineeringTaskPlanSchema.safeParse(node.metadata?.assistantEngineering);
+    return result.success ? [result.data] : [];
+  });
+}
 
 export type DraftNode = {
   ref: string;
@@ -21,6 +38,8 @@ export type DraftNode = {
   type: string;
   name: string;
   configuration: Record<string, unknown>;
+  instructionMode?: "inherit" | "override";
+  engineeringReport?: EngineeringTaskPlan;
 };
 
 export type DraftEdge = {
@@ -34,13 +53,16 @@ export type ArchitectureDraft = {
   nodes: DraftNode[];
   edges: DraftEdge[];
   summary: string;
+  taskPlans?: EngineeringTaskPlan[];
+  workflowTransitions?: WorkflowTransition[];
 };
 
 export function briefsReady(tasks: readonly WorkflowTask[]): boolean {
   return tasks.length > 0 && tasks.every((task) => task.role.trim() && task.expectedTasks.trim());
 }
 
-export function assistantTokenStatus(stored: boolean): string {
+export function assistantTokenStatus(stored: boolean, useToken = true): string {
+  if (!useToken) return "No API token will be sent. The local vault is not required.";
   return stored
     ? "A token is stored in the local vault. Enter a new token only to replace it."
     : "No assistant token is stored. Unlock the local vault, then save a token.";
@@ -60,33 +82,51 @@ function portId(node: ArchitectureNode, direction: "inputs" | "outputs", name: s
 export function applyDraft(
   graph: ArchitectureGraph,
   draft: ArchitectureDraft,
+  targetTaskIds?: readonly string[],
 ): { graph: ArchitectureGraph; added: number } {
-  const openTasks = new Set(emptyTaskIds(graph));
+  const openTasks = new Set(targetTaskIds ?? emptyTaskIds(graph));
   const accepted = draft.nodes.filter((node) => openTasks.has(node.taskId) && getNodeDefinition(node.type));
   if (accepted.length === 0) return { graph, added: 0 };
+  for (const taskId of openTasks) {
+    if (!accepted.some((node) => node.taskId === taskId &&
+      (node.type === "agent.sandboxed" || node.type.startsWith("harness.")))) {
+      throw new Error("The draft is missing an agent stage. No components were changed.");
+    }
+  }
+  const replacedIds = new Set(graph.nodes
+    .filter((node) => node.workflowTaskId && openTasks.has(node.workflowTaskId))
+    .map((node) => node.id));
+  if (graph.macroBlocks.some((macro) => macro.nodeIds.some((id) => replacedIds.has(id)))) {
+    throw new Error("Expand macros inside the selected tasks before rebuilding their components.");
+  }
 
   const counts = new Map<string, number>();
   const created = new Map<string, ArchitectureNode>();
-  const nodes = [...graph.nodes];
+  const nodes = graph.nodes.filter((node) => !replacedIds.has(node.id));
   for (const spec of accepted) {
     const task = graph.workflow.tasks.find((item) => item.id === spec.taskId);
     const index = counts.get(spec.taskId) ?? 0;
-    counts.set(spec.taskId, index + 1);
+    const executable = spec.type === "agent.sandboxed" || spec.type.startsWith("harness.");
+    if (!executable) counts.set(spec.taskId, index + 1);
     const origin = task?.engineeringBounds ?? { x: 80, y: 80 };
     const node = createNodeFromDefinition(
       spec.type,
-      { x: origin.x + 48, y: origin.y + 48 + index * 150 },
+      { x: origin.x + (executable ? 440 : 48), y: origin.y + (executable ? 160 : 48 + index * 180) },
       { name: spec.name, configuration: spec.configuration },
     );
     node.workflowTaskId = spec.taskId;
     if (spec.type === "agent.sandboxed" || spec.type.startsWith("harness.")) {
-      node.instructionMode = "inherit";
+      node.instructionMode = spec.instructionMode ?? "inherit";
+    }
+    if (spec.engineeringReport) {
+      node.metadata = { ...node.metadata, assistantEngineering: spec.engineeringReport };
     }
     created.set(spec.ref, node);
     nodes.push(node);
   }
 
-  const edges: ArchitectureEdge[] = [...graph.edges];
+  const edges: ArchitectureEdge[] = graph.edges.filter((edge) =>
+    !replacedIds.has(edge.sourceNodeId) && !replacedIds.has(edge.targetNodeId));
   for (const spec of draft.edges) {
     const source = created.get(spec.source);
     const target = created.get(spec.target);
@@ -114,8 +154,13 @@ export function applyDraft(
     const output = portId(executable, "outputs", "result");
     return {
       ...task,
-      ...(input && !task.inputBinding ? { inputBinding: { nodeId: executable.id, portId: input } } : {}),
-      ...(output && !task.outputBinding ? { outputBinding: { nodeId: executable.id, portId: output } } : {}),
+      engineeringBounds: {
+        ...task.engineeringBounds,
+        width: Math.max(task.engineeringBounds.width, 900),
+        height: Math.max(task.engineeringBounds.height, (counts.get(task.id) ?? 0) * 180 + 100),
+      },
+      ...(input ? { inputBinding: { nodeId: executable.id, portId: input } } : {}),
+      ...(output ? { outputBinding: { nodeId: executable.id, portId: output } } : {}),
     };
   });
 
@@ -125,7 +170,11 @@ export function applyDraft(
       ...graph,
       nodes,
       edges,
-      workflow: { ...graph.workflow, tasks },
+      workflow: {
+        ...graph.workflow, tasks,
+        transitions: graph.workflow.transitions.length === 0 && draft.workflowTransitions
+          ? draft.workflowTransitions : graph.workflow.transitions,
+      },
     },
   };
 }
@@ -154,14 +203,16 @@ export function requestDraft(
   endpoint: string,
   model: string,
   graph: ArchitectureGraph,
+  useToken = true,
+  targetTaskIds: readonly string[] = emptyTaskIds(graph),
 ): Promise<ArchitectureDraft> {
-  const open = new Set(emptyTaskIds(graph));
   return assistantFetch<ArchitectureDraft>("/api/v1/assistant/draft", {
     endpoint,
     model,
+    useToken,
+    targetTaskIds,
     workflow: {
       tasks: graph.workflow.tasks
-        .filter((task) => open.has(task.id))
         .map((task) => ({
           id: task.id,
           name: task.name,
@@ -170,6 +221,9 @@ export function requestDraft(
           constraints: task.constraints,
         })),
       transitions: graph.workflow.transitions,
+      input: graph.workflow.input,
+      availableTools: graph.nodes.filter(node => node.type === "agent.tool" || node.type === "mcp.client")
+        .map(node => ({ name: node.name, type: node.type, configuration: node.configuration })),
     },
   });
 }
@@ -179,6 +233,7 @@ export function requestAnswer(
   model: string,
   question: string,
   passages: { label: string; text: string }[],
+  useToken = true,
 ): Promise<{ answer: string }> {
-  return assistantFetch("/api/v1/assistant/ask", { endpoint, model, question, passages });
+  return assistantFetch("/api/v1/assistant/ask", { endpoint, model, question, passages, useToken });
 }

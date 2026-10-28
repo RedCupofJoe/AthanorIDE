@@ -22,6 +22,39 @@ def test_health_preserves_correlation_id(client: TestClient) -> None:
     assert response.headers["X-Correlation-ID"] == "test-correlation-123"
 
 
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3100",
+        "http://127.0.0.1:3100",
+    ],
+)
+@pytest.mark.parametrize("route", ["/api/v1/projects/validate", "/api/v1/assistant/draft"])
+def test_local_editor_preflight(client: TestClient, origin: str, route: str) -> None:
+    response = client.options(
+        route,
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["Access-Control-Allow-Origin"] == origin
+
+
+@pytest.mark.parametrize("origin", ["https://untrusted.example", "http://localhost:3101"])
+def test_unconfigured_origin_is_rejected(client: TestClient, origin: str) -> None:
+    response = client.options(
+        "/api/v1/assistant/draft",
+        headers={"Origin": origin, "Access-Control-Request-Method": "POST"},
+    )
+    assert response.status_code == 400
+    assert "Access-Control-Allow-Origin" not in response.headers
+
+
 def test_node_definitions_empty(client: TestClient) -> None:
     response = client.get("/api/v1/node-definitions")
     assert response.status_code == 200

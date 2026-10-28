@@ -16,9 +16,9 @@ import "@xyflow/react/dist/style.css";
 import { newId } from "@athanor/contracts";
 import { useProjectStore } from "@/store/project-store";
 import { useSelectionStore } from "@/store/selection-store";
-import { parseTaskFlowId, taskFlowId } from "@/lib/workflow";
-import { TaskNode, StartNode } from "./TaskNode";
-const nodeTypes = { workflowTask: TaskNode, workflowStart: StartNode };
+import { parseTaskFlowId, taskFlowId, workflowEndTasks } from "@/lib/workflow";
+import { TaskNode, StartNode, EndNode } from "./TaskNode";
+const nodeTypes = { workflowTask: TaskNode, workflowStart: StartNode, workflowEnd: EndNode };
 export const transitionFlowId = (id: string) => `workflow-transition:${id}`;
 export const parseTransitionFlowId = (id: string) =>
   id.startsWith("workflow-transition:") ? id.slice(20) : null;
@@ -40,9 +40,16 @@ function Inner() {
       {
         id: "workflow-start",
         type: "workflowStart",
-        position: { x: 40, y: 160 },
+        position: { x: Math.min(40, ...workflow.tasks.map(t => t.bounds.x - 180)), y: 160 },
         data: {},
         draggable: false,
+      },
+      {
+        id: "workflow-end", type: "workflowEnd", draggable: false, selectable: false,
+        position: {
+          x: Math.max(240, ...workflow.tasks.map(t => t.bounds.x + t.bounds.width + 120)),
+          y: workflow.tasks.length ? Math.min(...workflow.tasks.map(t => t.bounds.y)) + 60 : 160,
+        }, data: {},
       },
       ...workflow.tasks.map((task) => ({
         id: taskFlowId(task.id),
@@ -84,6 +91,12 @@ function Inner() {
     markerEnd: { type: MarkerType.ArrowClosed },
     interactionWidth: 24,
   }));
+  edges.push(...workflowEndTasks(workflow).map(task => ({
+    id: `workflow-end:${task.id}`, source: taskFlowId(task.id), target: "workflow-end",
+    sourceHandle: "out", targetHandle: "in", label: "Complete", selectable: false,
+    deletable: false, style: { stroke: "#047857", strokeWidth: 2 },
+    markerEnd: { type: MarkerType.ArrowClosed },
+  })));
   const connect = (connection: Connection) => {
     const target = parseTaskFlowId(connection.target),
       source =
@@ -217,8 +230,8 @@ function Inner() {
               false,
             );
         }}
-        onNodeClick={(_, node) => selection.setSelection([node.id])}
-        onEdgeClick={(_, edge) => selection.setSelection([], [edge.id])}
+        onNodeClick={(_, node) => { if (node.id !== "workflow-end") selection.setSelection([node.id]); }}
+        onEdgeClick={(_, edge) => { if (!edge.id.startsWith("workflow-end:")) selection.setSelection([], [edge.id]); }}
         onPaneClick={() => selection.clearSelection()}
         deleteKeyCode={null}
         minZoom={0.2}

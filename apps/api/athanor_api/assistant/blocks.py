@@ -98,3 +98,14 @@ def describe_block(block_type: str) -> dict[str, Any]:
         "outputs": _ports(definition, "outputs"),
         "configurationFields": configuration,
     }
+
+
+def task_tool_inventory(available: list[dict[str, Any]]) -> dict[str, Any]:
+    """List supported adapters and saved integrations, without contacting services."""
+    return {
+        "adapters": [describe_block(kind) for kind in ("agent.tool", "mcp.client")],
+        "configuredTools": available,
+        "availability": "Saved configurations are candidates, not verified reachable services. "
+        "Reuse their exact configuration when relevant. Missing endpoints require setup. "
+        "Sandbox isolation does not itself give the agent file or shell tools.",
+    }

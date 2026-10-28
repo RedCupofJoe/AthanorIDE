@@ -4,7 +4,7 @@ import { EXAMPLE_PROJECTS, buildExampleProject } from "./example-projects";
 
 describe("agent starter projects", () => {
   it("exposes role-aware agent engineering flows", () => {
-    expect(EXAMPLE_PROJECTS.map(item => item.id)).toEqual(["parallel-workflow", "sandboxed-agent", "mcp-server", "agent-harness"]);
+    expect(EXAMPLE_PROJECTS.map(item => item.id)).toEqual(["adaptive-research", "parallel-workflow", "sandboxed-agent", "mcp-server", "agent-harness"]);
   });
   it.each(EXAMPLE_PROJECTS)("$name connects every required input with matching contracts", example => {
     const graph = example.build();
@@ -19,6 +19,23 @@ describe("agent starter projects", () => {
       const target = graph.nodes.find(n => n.id === edge.targetNodeId)!.inputs.find(p => p.id === edge.targetPortId)!;
       expect(areContractsCompatible(source.contractType, target.contractType)).toBe(true);
     }
+  });
+  it("uses different dependency graphs per task with no disconnected filler", () => {
+    const graph = buildExampleProject("adaptive-research")!;
+    expect(graph.workflow.tasks.map(task => graph.nodes.filter(n => n.workflowTaskId === task.id).length)).toEqual([4, 7, 5]);
+    for (const task of graph.workflow.tasks) {
+      const closure = new Set([task.outputBinding!.nodeId]);
+      let size = -1;
+      while (size !== closure.size) {
+        size = closure.size;
+        graph.edges.filter(e => closure.has(e.targetNodeId)).forEach(e => closure.add(e.sourceNodeId));
+      }
+      expect(closure.has(task.inputBinding!.nodeId)).toBe(true);
+      expect(graph.nodes.filter(n => n.workflowTaskId === task.id).every(n => closure.has(n.id))).toBe(true);
+    }
+    const tools = graph.nodes.filter(n => n.type === "agent.tool" || n.type === "mcp.client");
+    expect(tools).toHaveLength(3);
+    expect(tools.every(n => n.workflowTaskId === graph.workflow.tasks[1]!.id && n.configuration.requiresApproval === true)).toBe(true);
   });
   it("returns null for an unknown example", () => expect(buildExampleProject("missing")).toBeNull());
 });

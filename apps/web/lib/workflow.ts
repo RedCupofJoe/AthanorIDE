@@ -183,3 +183,20 @@ export function securityCategories(node: ArchitectureNode): string[] {
   if (node.instructionMode === "override") tags.push("Instruction override");
   return tags;
 }
+
+/** Normal terminal tasks reach End; recovery handlers substitute their failed task's result. */
+export function workflowEndTasks(workflow: ArchitectureGraph["workflow"]): WorkflowTask[] {
+  const reachable = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of workflow.transitions) {
+      if (edge.kind === "normal" && (edge.sourceTaskId === null || reachable.has(edge.sourceTaskId)) && !reachable.has(edge.targetTaskId)) {
+        reachable.add(edge.targetTaskId);
+        changed = true;
+      }
+    }
+  }
+  const continuing = new Set(workflow.transitions.filter(e => e.kind === "normal").map(e => e.sourceTaskId));
+  return workflow.tasks.filter(task => reachable.has(task.id) && !continuing.has(task.id));
+}

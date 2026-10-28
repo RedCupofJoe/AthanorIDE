@@ -1,4 +1,4 @@
-.PHONY: install install-macos bootstrap-tools dev stop lint typecheck test podman-up podman-down openshift-ide-apply clean help
+.PHONY: install install-macos setup-model-endpoint bootstrap-tools dev stop lint typecheck test podman-up podman-down openshift-ide-apply clean help
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 TOOLS_DIR := $(ROOT_DIR)/.tools
@@ -11,6 +11,7 @@ help:
 	@echo "AthanorIDE Make targets:"
 	@echo "  make install       Bootstrap tools and install dependencies"
 	@echo "  make install-macos Guided macOS setup for Intel and Apple Silicon Macs"
+	@echo "  make setup-model-endpoint Set up the cached Qwen2.5-7B CUDA model service (Linux)"
 	@echo "  make dev           Run API + web for local development"
 	@echo "  make stop          Stop API + web processes from this checkout"
 	@echo "  make lint          Lint TypeScript and Python"
@@ -34,6 +35,9 @@ install: bootstrap-tools
 
 install-macos:
 	@bash "$(ROOT_DIR)/scripts/install-macos.sh"
+
+setup-model-endpoint:
+	@python3 "$(ROOT_DIR)/scripts/setup-model-endpoint.py"
 
 dev: bootstrap-tools
 	@echo "==> Rebuilding shared TypeScript packages (palette/catalog)"

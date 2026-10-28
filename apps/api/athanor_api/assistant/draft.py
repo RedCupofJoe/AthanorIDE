@@ -3,19 +3,31 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import urllib.error
 import urllib.request
 from collections.abc import Callable
 from typing import Any
 
-from athanor_api.assistant.blocks import definition_by_type, describe_block, list_blocks
+from jsonschema.exceptions import SchemaError  # type: ignore[import-untyped]
+
+from athanor_api.assistant.blocks import definition_by_type, task_tool_inventory
+from athanor_api.assistant.plans import (
+    TASK_PLAN_SCHEMA,
+    chain_transitions,
+    compile_plan,
+    task_context,
+    validate_plan,
+)
+from athanor_api.assistant.prompts import ENGINEERING_SYSTEM_PROMPT
+from athanor_api.schemas.tool_arguments import validate_schema
 from athanor_api.secret_scan import redact_embedded_secrets, text_contains_embedded_secret
 
 ChatPost = Callable[[str, str, dict[str, Any]], dict[str, Any]]
 
-_MAX_NODES = 40
-_MAX_ROUNDS = 6
+_MAX_NODES = 80
+_MAX_ROUNDS = 3
 
 
 class AssistantError(Exception):
@@ -55,13 +67,39 @@ def redact_workflow(workflow: dict[str, Any]) -> dict[str, Any]:
             continue
         transitions_out.append(
             {
+                "id": transition.get("id"),
                 "sourceTaskId": transition.get("sourceTaskId"),
                 "targetTaskId": transition.get("targetTaskId"),
                 "kind": transition.get("kind"),
                 "stage": transition.get("stage"),
+                "recoveryDescription": _redact_text(
+                    str(transition.get("recoveryDescription") or "")
+                ),
             }
         )
-    return {"tasks": tasks_out, "transitions": transitions_out}
+    available = []
+    for item in workflow.get("availableTools") or []:
+        if not isinstance(item, dict) or item.get("type") not in {"agent.tool", "mcp.client"}:
+            continue
+        try:
+            definition = definition_by_type(item["type"])
+            assert definition is not None
+            configuration = _merge_configuration(definition, item.get("configuration"))
+        except DraftError:
+            continue
+        available.append(
+            {
+                "name": _redact_text(str(item.get("name", item["type"]))),
+                "type": item["type"],
+                "configuration": configuration,
+            }
+        )
+    return {
+        "availableTools": available,
+        "tasks": tasks_out,
+        "transitions": transitions_out,
+        "input": _redact_text(str(workflow.get("input") or "")),
+    }
 
 
 def _string_values(value: Any) -> list[str]:
@@ -113,9 +151,35 @@ def _merge_configuration(definition: dict[str, Any], provided: Any) -> dict[str,
             merged[key] = field.get("defaultValue")
         if field.get("required") and merged[key] in (None, ""):
             raise DraftError([f"Missing required configuration field {key}."])
+        value = merged[key]
+        kind = field.get("type")
+        if kind == "boolean" and not isinstance(value, bool):
+            raise DraftError([f"Configuration field {key} must be a boolean."])
+        if kind == "number" and (
+            isinstance(value, bool)
+            or not isinstance(value, (float, int))
+            or not math.isfinite(value)
+            or value <= 0
+        ):
+            raise DraftError([f"Configuration field {key} must be a positive finite number."])
+        if kind == "select" and value not in field.get("options", []):
+            raise DraftError(
+                [f"Configuration field {key} must be one of {field.get('options', [])}."]
+            )
+        if kind in {"string", "text", "schema"} and not isinstance(value, str):
+            raise DraftError([f"Configuration field {key} must be a string."])
     for text in _string_values(merged):
         if text_contains_embedded_secret(text):
             raise DraftError(["Configuration includes an embedded secret. Use a secret name only."])
+    if "inputSchema" in merged:
+        try:
+            validate_schema(merged["inputSchema"])
+        except (ValueError, TypeError, SchemaError):
+            raise DraftError(["Tool inputSchema must be a valid JSON Schema object."]) from None
+    if merged.get("secretName") and not re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*", merged["secretName"]
+    ):
+        raise DraftError(["secretName must be an environment variable name."])
     return merged
 
 
@@ -129,6 +193,8 @@ def validate_draft(workflow: dict[str, Any], proposal: dict[str, Any]) -> dict[s
     raw_edges = proposal.get("edges")
     if not isinstance(raw_nodes, list) or not isinstance(raw_edges, list):
         raise DraftError(["Draft must include nodes and edges arrays."])
+    if not task_ids or not raw_nodes:
+        raise DraftError(["Build at least one complete agent stage for every requested task."])
     if len(raw_nodes) > _MAX_NODES:
         raise DraftError([f"Draft has more than {_MAX_NODES} components."])
 
@@ -161,6 +227,16 @@ def validate_draft(workflow: dict[str, Any], proposal: dict[str, Any]) -> dict[s
                 "type": block_type,
                 "name": name,
                 "configuration": configuration,
+                **(
+                    {"instructionMode": raw["instructionMode"]}
+                    if raw.get("instructionMode") in {"inherit", "override"}
+                    else {}
+                ),
+                **(
+                    {"engineeringReport": raw["engineeringReport"]}
+                    if isinstance(raw.get("engineeringReport"), dict)
+                    else {}
+                ),
             }
         )
         contracts[ref] = {
@@ -170,6 +246,7 @@ def validate_draft(workflow: dict[str, Any], proposal: dict[str, Any]) -> dict[s
         task_by_ref[ref] = task_id
 
     edges: list[dict[str, Any]] = []
+    connected_inputs: set[tuple[str, str]] = set()
     for raw in raw_edges:
         if not isinstance(raw, dict):
             raise DraftError(["Each edge must be an object."])
@@ -194,6 +271,15 @@ def validate_draft(workflow: dict[str, Any], proposal: dict[str, Any]) -> dict[s
                     f"and {target}.{target_port} ({target_contract})."
                 ]
             )
+        target_node = next(node for node in nodes if node["ref"] == target)
+        definition = definition_by_type(target_node["type"])
+        assert definition is not None  # All node types were checked above.
+        port = next(p for p in definition["inputs"] if p["name"] == target_port)
+        if (target, target_port) in connected_inputs and not port.get("multiple"):
+            raise DraftError([f"Input {target}.{target_port} accepts only one connection."])
+        if target_port == "task" and target_node["type"] == "agent.sandboxed":
+            raise DraftError([f"The workflow supplies {target}.task; remove its component wire."])
+        connected_inputs.add((target, target_port))
         edges.append(
             {
                 "source": source,
@@ -202,6 +288,25 @@ def validate_draft(workflow: dict[str, Any], proposal: dict[str, Any]) -> dict[s
                 "targetPort": target_port,
             }
         )
+    for task_id in task_ids:
+        agents = [
+            n
+            for n in nodes
+            if n["taskId"] == task_id
+            and (n["type"] == "agent.sandboxed" or n["type"].startswith("harness."))
+        ]
+        if not agents:
+            raise DraftError([f"Task {task_id} needs an executable agent, model, and sandbox."])
+        for agent in agents:
+            definition = definition_by_type(agent["type"])
+            assert definition is not None
+            for port in definition["inputs"]:
+                if (
+                    port.get("required")
+                    and port["name"] != "task"
+                    and (agent["ref"], port["name"]) not in connected_inputs
+                ):
+                    raise DraftError([f"Connect required input {agent['ref']}.{port['name']}."])
     summary = f"Drafted {len(nodes)} components and {len(edges)} connections."
     return {"nodes": nodes, "edges": edges, "summary": summary}
 
@@ -210,14 +315,13 @@ def post_chat(endpoint: str, token: str, body: dict[str, Any]) -> dict[str, Any]
     encoded = json.dumps(body)
     if token and token in encoded:
         raise AssistantError(500, "Refusing to send the vault token to the model.")
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(
         endpoint,
         data=encoded.encode(),
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
+        headers=headers,
         method="POST",
     )
     try:
@@ -237,40 +341,11 @@ def _tool_schema() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
-                "name": "list_blocks",
-                "description": "List canvas blocks, their ports, and required fields.",
-                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+                "name": "submit_task_plan",
+                "description": "Submit a complete engineering plan for the current task stage.",
+                "parameters": TASK_PLAN_SCHEMA,
             },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "describe_block",
-                "description": "Describe one block's ports and configuration fields.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"block_type": {"type": "string"}},
-                    "required": ["block_type"],
-                    "additionalProperties": False,
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "submit_draft",
-                "description": "Submit the finished architecture. Do not include secret values.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "nodes": {"type": "array", "items": {"type": "object"}},
-                        "edges": {"type": "array", "items": {"type": "object"}},
-                    },
-                    "required": ["nodes", "edges"],
-                    "additionalProperties": False,
-                },
-            },
-        },
+        }
     ]
 
 
@@ -320,77 +395,125 @@ def generate_draft(
     model: str,
     workflow: dict[str, Any],
     token: str,
+    target_task_ids: list[str] | None = None,
     post: ChatPost | None = None,
 ) -> dict[str, Any]:
     sender = post or post_chat
     safe_workflow = redact_workflow(workflow)
-    messages: list[dict[str, Any]] = [
-        {
-            "role": "system",
-            "content": (
-                "Draft an AthanorIDE engineering graph for the supplied SME tasks. "
-                "Use list_blocks and describe_block to choose catalog blocks. "
-                "Put each component on one task. Connect components only inside that task. "
-                "Prefer a model endpoint, a sandbox, and one sandboxed agent or harness per task. "
-                "Keep catalog defaults. Secret fields stay empty or name an environment variable. "
-                "Finish by calling submit_draft."
-            ),
-        },
-        {"role": "user", "content": json.dumps({"workflow": safe_workflow})},
-    ]
-    tools = _tool_schema()
-    for _round in range(_MAX_ROUNDS):
-        message = _message_content(
-            sender(
-                endpoint,
-                token,
-                {"model": model, "messages": messages, "tools": tools, "temperature": 0},
-            )
-        )
-        tool_calls = message.get("tool_calls")
-        if not isinstance(tool_calls, list) or not tool_calls:
-            proposal = _proposal_from_text(str(message.get("content") or ""))
-            if proposal is None:
-                messages.append({"role": "assistant", "content": message.get("content") or ""})
-                messages.append(
-                    {"role": "user", "content": "Call submit_draft with the architecture."}
-                )
-                continue
-            try:
-                return validate_draft(workflow, proposal)
-            except DraftError as exc:
-                messages.append({"role": "assistant", "content": message.get("content") or ""})
-                messages.append(
-                    {"role": "user", "content": "Draft rejected: " + "; ".join(exc.messages)}
-                )
+    tasks = safe_workflow["tasks"]
+    ids = [task["id"] for task in tasks]
+    if (
+        not tasks
+        or len(tasks) > 10
+        or any(not isinstance(i, str) or not i for i in ids)
+        or len(set(ids)) != len(ids)
+    ):
+        raise DraftError(["Provide 1-10 tasks with unique IDs to build the prompt chain."])
+    selected = set(ids if target_task_ids is None else target_task_ids)
+    if not selected or selected - set(ids):
+        raise DraftError(["Select existing workflow tasks to build."])
+    if any(
+        not t["role"].strip() or not t["expectedTasks"].strip()
+        for t in tasks
+        if t["id"] in selected
+    ):
+        raise DraftError(["Add a role and expected tasks to each selected task."])
+    try:
+        safe_workflow["transitions"] = chain_transitions(safe_workflow)
+    except ValueError as exc:
+        raise DraftError([str(exc)]) from exc
+    stages = {e["targetTaskId"]: e["stage"] for e in safe_workflow["transitions"]}
+    if any(not isinstance(stage, int) or stage < 1 for stage in stages.values()):
+        raise DraftError(["Workflow stages must be positive integers."])
+    plans: dict[str, dict[str, Any]] = {}
+    proposal: dict[str, Any] = {"nodes": [], "edges": []}
+    reports = []
+    for index, task in enumerate(sorted(tasks, key=lambda t: stages.get(t["id"], 1))):
+        if task["id"] not in selected:
             continue
-        messages.append(
+        messages = [
+            {"role": "system", "content": ENGINEERING_SYSTEM_PROMPT},
+            {"role": "user", "content": json.dumps(task_context(safe_workflow, task, plans))},
+        ]
+        # Inventory is supplied deterministically before planning; no model round trip is wasted
+        # asking whether to discover tools. The model sees the actual adapter schemas each time.
+        messages[1]["content"] = json.dumps(
             {
-                "role": "assistant",
-                "content": message.get("content") or "",
-                "tool_calls": tool_calls,
+                **task_context(safe_workflow, task, plans),
+                "toolInventory": task_tool_inventory(safe_workflow["availableTools"]),
             }
         )
-        for call in tool_calls:
-            if not isinstance(call, dict):
-                continue
-            function = call.get("function")
-            if not isinstance(function, dict):
-                continue
-            name = str(function.get("name") or "")
-            arguments = _parse_arguments(function.get("arguments"))
-            if name == "submit_draft":
-                try:
-                    return validate_draft(workflow, arguments)
-                except DraftError as exc:
-                    result = json.dumps({"error": exc.messages})
-            elif name == "list_blocks":
-                result = json.dumps(list_blocks())
-            elif name == "describe_block":
-                result = json.dumps(describe_block(str(arguments.get("block_type") or "")))
-            else:
-                result = json.dumps({"error": f"Unknown tool {name}"})
-            messages.append(
-                {"role": "tool", "tool_call_id": str(call.get("id") or name), "content": result}
+        errors = ["Call submit_task_plan with all required fields."]
+        for attempt in range(_MAX_ROUNDS):
+            response = sender(
+                endpoint,
+                token,
+                {
+                    "model": model,
+                    "messages": messages,
+                    "tools": _tool_schema(),
+                    "tool_choice": {"type": "function", "function": {"name": "submit_task_plan"}},
+                    "temperature": 0.2,
+                    "max_tokens": 3072,
+                },
             )
-    raise AssistantError(422, "The model did not return a valid architecture.")
+            message = _message_content(response)
+            calls = message.get("tool_calls")
+            plan = None
+            if isinstance(calls, list) and len(calls) == 1 and isinstance(calls[0], dict):
+                function = calls[0].get("function", {})
+                if isinstance(function, dict) and function.get("name") == "submit_task_plan":
+                    plan = _parse_arguments(function.get("arguments"))
+            elif not calls:
+                plan = _proposal_from_text(str(message.get("content") or ""))
+            errors = (
+                validate_plan(plan, task["id"])
+                if plan is not None
+                else ["Submit exactly one submit_task_plan call for the current task."]
+            )
+            if not errors and plan is not None:
+                try:
+                    part, report = compile_plan(
+                        task,
+                        plan,
+                        index=index,
+                        endpoint=endpoint,
+                        model=model,
+                        authenticated=bool(token),
+                        available_tools=safe_workflow["availableTools"],
+                    )
+                    part = validate_draft({"tasks": [task]}, part)
+                except DraftError as exc:
+                    errors = exc.messages
+                else:
+                    proposal["nodes"].extend(part["nodes"])
+                    proposal["edges"].extend(part["edges"])
+                    reports.append(report)
+                    plans[task["id"]] = plan
+                    break
+            if attempt == _MAX_ROUNDS - 1:
+                raise AssistantError(422, f"Could not build {task['name']}: " + "; ".join(errors))
+            # Give precise feedback without retaining malformed tool-call protocol messages.
+            messages.append(
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "rejectedPlan": (
+                                None if text_contains_embedded_secret(json.dumps(plan)) else plan
+                            ),
+                            "errors": errors,
+                            "instruction": "Correct these issues and resubmit the full task plan.",
+                        }
+                    ),
+                }
+            )
+    result = validate_draft({"tasks": [t for t in tasks if t["id"] in selected]}, proposal)
+    result["taskPlans"] = reports
+    if not workflow.get("transitions"):
+        result["workflowTransitions"] = safe_workflow["transitions"]
+    result["summary"] = (
+        f"Built {len(reports)} agent stages, {len(result['nodes'])} components, and "
+        f"{len(result['edges'])} connections. Review the stage plans and setup requirements."
+    )
+    return result

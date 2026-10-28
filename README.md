@@ -336,6 +336,100 @@ The API reads `ATHANOR_*` settings and a `.env` file relative to its working dir
 | `ATHANOR_IMAGE` | Exported launcher image override, not the IDE API image |
 | `ATHANOR_PYTHON` | npm-export Python executable override |
 
+### Set up the local Qwen2.5-7B-Instruct endpoint (Linux/NVIDIA)
+
+With Python 3.10+, a working NVIDIA driver, a user systemd session, and a recent
+CUDA-enabled `llama` or `llama-server` runtime installed, run:
+
+```bash
+make setup-model-endpoint
+```
+
+The [setup script](scripts/setup-model-endpoint.py) reuses the official cached
+Qwen2.5-7B-Instruct Q4_K_M GGUF (two shards, 4.7 GB total), verifies both pinned
+SHA-256 checksums, selects the NVIDIA
+GPU with the most total VRAM, and enables `athanor-model.service` for your user
+session. Its defaults match the tested RTX 5090 setup: loopback port 8081, a 32K
+context, native tool calling, and up to 4,096 output tokens.
+
+The script first checks `/run/media/<user>/model-repo/llm-models/Qwen2.5-7B-Instruct-GGUF`,
+then the Hugging Face cache for revision `bb5d59e06d9551d752d08b292a50eb208b07ab1f`.
+It uses the cached files in place, preserving shard names and symlinks. It does not
+download weights unless you pass `--download`; `HF_HUB_CACHE`, `HF_HOME`, and
+`XDG_CACHE_HOME` are respected. The default runtime search
+checks `~/.llama-app/llama`, then `llama` and `llama-server` on `PATH`. Install a
+CUDA runtime from the [official llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases)
+if needed. The script does not install drivers or runtimes and rejects a runtime
+that cannot use CUDA.
+
+```bash
+# Preview prerequisites and the generated service without making changes.
+python3 scripts/setup-model-endpoint.py --dry-run
+
+# Override the local paths, GPU index (or UUID), and port; prevent downloads.
+python3 scripts/setup-model-endpoint.py \
+  --model-dir /path/to/Qwen2.5-7B-Instruct-GGUF --llama-bin /path/to/llama \
+  --gpu 0 --port 8081 --no-download
+
+# Check health, model discovery, chat, and a complete tool-call round trip.
+python3 scripts/setup-model-endpoint.py --check-only
+
+systemctl --user restart athanor-model
+systemctl --user stop athanor-model
+journalctl --user -u athanor-model -f
+```
+
+Optional downloads resume when rerun with `--download`. Existing files with a mismatched
+checksum are preserved and rejected. Re-running setup keeps an unchanged healthy
+service running. The model service is separate from `make dev` / `make stop`;
+its runtime and model files must remain available. Connection details are saved
+in `~/.config/athanor/model-endpoint.json` (or under `XDG_CONFIG_HOME`).
+
+In **Assistant settings**, save `http://127.0.0.1:8081/v1/chat/completions` and model
+ID `qwen2.5-7b-instruct`, turn **Use API token** off, and click **Save**. The model
+endpoint has no API key and listens only on loopback. With the switch off, both
+assistant actions skip the vault and omit the Authorization header. For an endpoint
+that requires authentication, turn the switch on and save its token in the unlocked
+**Local vault**. Turning it off preserves any previously stored token. Existing
+settings default to token authentication until explicitly switched off.
+
+The setup smoke check verifies chat and a basic function-call round trip.
+**Build agent chain** plans each task separately using its brief, neighboring
+tasks, and its predecessor's output contract. The default AI engineering prompt
+is in `apps/api/athanor_api/assistant/prompts.py`. Each task gets a configured
+model, sandbox, output guardrails, and an agent with specific instructions,
+input/output contracts, failure handling, and acceptance checks. The compiler
+owns typed wiring; incomplete plans are retried and one-node drafts are rejected.
+
+The SME canvas includes an **End** node. Reachable final normal tasks connect
+to it automatically; recovery handlers resume their original branch. Completion
+waits for all normal branches, matching the exported scheduler.
+
+Before planning each task, the builder supplies a fresh tool inventory containing
+supported HTTP/MCP adapter schemas and existing project integrations. Selected
+saved integrations reuse their endpoint, argument schema, and secret reference.
+This lists configurations without contacting services or granting new tools.
+
+The resulting workflow passes each task's result to the next task as its prompt
+input, without hidden conversation history. Multiple predecessors arrive as a
+JSON map keyed by task ID. Existing transitions, including parallel and recovery
+paths, are preserved; a concept without transitions becomes a serial chain in
+task order. Each agent returns a state containing status, result, evidence,
+artifacts, and missing inputs for the next stage.
+
+Select **Rebuild all tasks** to replace existing task components (including old
+one-node drafts); Undo restores them. Rebuild after changing a task brief to
+refresh its generated instructions. Review the saved **Engineering stage plans**
+for acceptance checks and setup requirements. HTTP/MCP tools are connected only
+when their endpoint and configuration are supplied; missing integrations are
+listed for setup rather than fabricated. Building creates the graph and prompts;
+**Run preview** does not execute model calls. Run the exported workflow to execute
+the agents.
+
+The script does not change browser preferences. Exported
+containers need their own reachable endpoint address; container loopback does
+not point to this host service.
+
 ### Use different development ports
 
 `make dev` uses ports 8000/3000. To use different ports, first run `make install`, then run the services separately in two terminals from the repository root. Add bootstrapped tools to each shell's path if necessary:
@@ -365,6 +459,7 @@ Open `http://127.0.0.1:3010`. `make stop` stops those processes too. Setting onl
 
 | Symptom | Check / fix |
 | --- | --- |
+| Browser says “Load failed” or “Failed to fetch” | The API allows `localhost` and `127.0.0.1` on ports 3000 and 3100 by default. An `ATHANOR_CORS_ORIGINS` override replaces that list; include the exact frontend scheme, hostname, and port, then restart the API. |
 | Validate, preview, or export cannot reach the API | Check the health URL, API process, frontend API URL, and allowed CORS origin. Root `pnpm dev` does not start the API; use `make dev`. |
 | Registry search fails | Confirm the registry base URL and browser CORS policy; paste/upload its manifest if browser access is unavailable. |
 | Imported MCP server offers no tools | Set exact allowed tool names, check credentials, transport, executable, and pinned package version. Empty allowlists intentionally expose none. |

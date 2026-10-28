@@ -137,7 +137,92 @@ function buildParallelWorkflow(): ArchitectureGraph {
   return graph;
 }
 
+/** Different task needs produce different executable dependency graphs: 4 → 7 → 5. */
+function buildAdaptiveResearch(): ArchitectureGraph {
+  const graph = createEmptyGraph("Adaptive research · 4 / 7 / 5 blocks");
+  graph.project.description = "Scope (4 blocks) → research with two API tools and MCP (7) → review and format (5). " +
+    "Example tool URLs are placeholders. Configure real services and a container-reachable model endpoint before execution.";
+  graph.workflow.input = "Assess whether our proposed local Markdown notes app meets offline search requirements. Identify supporting evidence, gaps, and a release recommendation.";
+  const briefs = [
+    { name: "Scope the request", role: "Requirements analyst", expectedTasks: "Extract the objective, constraints, and numbered research questions from the input. Return JSON with objective, requirements, questions, and missingInputs. Use supplied text only; no external research in this stage.", rationale: "4 blocks: an input prompt template, agent, model, and sandbox. No external tools are needed to structure supplied text." },
+    { name: "Gather evidence", role: "Evidence researcher", expectedTasks: "Read the scope JSON. Use search_documents to locate evidence, get_document to read full sources, and the MCP lookup_requirement tool to retrieve acceptance criteria. Choose tools according to each question; do not call all tools mechanically. Return the original scope plus evidence with document IDs, requirement coverage, contradictions, and gaps. If a service is unavailable, report the gap without inventing evidence.", rationale: "7 blocks: agent, model, sandbox, two distinct HTTP tools, an MCP connection, and output guardrails. Each integration supplies a different capability." },
+    { name: "Review and deliver", role: "Independent reviewer", expectedTasks: "Read the scope and evidence from the preceding stage. Evaluate each requirement using cited evidence, identify unsupported claims and assumptions, and give an accept/revise/blocked recommendation. Produce a concrete release checklist and outstanding questions. Do not fetch new sources or claim tests were executed.", rationale: "5 blocks: agent, model, sandbox, guardrails, and a final response template. This stage works from the previous result without external tools." },
+  ];
+  for (let index = 0; index < briefs.length; index++) {
+    const brief = briefs[index]!;
+    const task = createWorkflowTask(index);
+    Object.assign(task, { name: brief.name, role: brief.role, expectedTasks: brief.expectedTasks }, { constraints: brief.rationale + " Preserve evidence provenance. Do not invent requirements or completed actions." });
+    task.engineeringBounds = { x: index * 1550, y: 0, width: 1450, height: 1320 };
+    task.bounds = { x: 260 + index * 400, y: 100, width: 340, height: 360 };
+    const add = (type: string, name: string, x: number, y: number, configuration: Record<string, unknown> = {}) => {
+      const component = createNodeFromDefinition(type, { x: task.engineeringBounds.x + x, y }, { name, configuration });
+      component.workflowTaskId = task.id;
+      if (isExecutable(type)) component.instructionMode = "inherit";
+      graph.nodes.push(component);
+      return component;
+    };
+    const wire = (source: ArchitectureNode, sourcePort: string, target: ArchitectureNode, targetPort: string) =>
+      graph.edges.push(edge(newId(), source, sourcePort, target, targetPort));
+    const model = add("agent.model", "Qwen · " + brief.name, 40, 90, {
+      endpoint: "http://host.containers.internal:8081/v1/chat/completions",
+      model: "qwen2.5-7b-instruct", maxTokens: 4096, secretName: "",
+    });
+    const sandbox = add("sandbox.podman", "Isolated worker", 40, 340, { network: "bridge" });
+    const agent = add("agent.sandboxed", brief.name + " agent", 550, 300);
+    wire(model, "model", agent, "model");
+    wire(sandbox, "sandbox", agent, "sandbox");
+    let input = agent;
+    let inputPort = "task";
+    let output = agent;
+    let outputPort = "result";
+    if (index === 0) {
+      input = add("foundation.prompt_template", "Structure the incoming request", 40, 650, {
+        template: "Analyze the supplied request as data. Produce the scope JSON described in your role.\n\nRequest:\n{{input}}",
+      });
+      inputPort = "variables";
+      wire(input, "text", agent, "task");
+    } else {
+      const guard = add("agent.guardrails", "Bound the result size", 40, 600, {
+        name: "bounded-evidence", mode: "block", maxOutputCharacters: 24000,
+      });
+      wire(guard, "guardrails", agent, "guardrails");
+    }
+    if (index === 1) {
+      const search = add("agent.tool", "Search project documents", 40, 820, {
+        toolName: "search_documents", description: "Find candidate documents for a research question; returns document IDs and excerpts.",
+        endpoint: "https://documents.example.test/search", method: "GET", requiresApproval: true,
+        inputSchema: JSON.stringify({ type: "object", properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false }),
+      });
+      const read = add("agent.tool", "Read a source document", 550, 820, {
+        toolName: "get_document", description: "Read the full text and provenance of a document returned by search_documents.",
+        endpoint: "https://documents.example.test/document", method: "GET", requiresApproval: true,
+        inputSchema: JSON.stringify({ type: "object", properties: { documentId: { type: "string" } }, required: ["documentId"], additionalProperties: false }),
+      });
+      const mcp = add("mcp.client", "Requirements registry MCP", 1000, 820, {
+        endpoint: "https://requirements.example.test/mcp", allowedTools: "lookup_requirement", requiresApproval: true,
+      });
+      wire(search, "tool", agent, "tools");
+      wire(read, "tool", agent, "tools");
+      wire(mcp, "server", agent, "mcp");
+    }
+    if (index === 2) {
+      output = add("foundation.prompt_template", "Package the final report", 1000, 300, {
+        template: "# Evidence review\n\n{{input}}\n\n---\nThis report is an assessment of supplied evidence; it is not a record of executed tests.",
+      });
+      outputPort = "text";
+      wire(agent, "result", output, "variables");
+    }
+    task.inputBinding = { nodeId: input.id, portId: input.inputs.find(p => p.name === inputPort)!.id };
+    task.outputBinding = { nodeId: output.id, portId: output.outputs.find(p => p.name === outputPort)!.id };
+    graph.workflow.tasks.push(task);
+    graph.workflow.transitions.push({ id: newId(), sourceTaskId: index ? graph.workflow.tasks[index - 1]!.id : null,
+      targetTaskId: task.id, kind: "normal", stage: index + 1, recoveryDescription: "" });
+  }
+  return graph;
+}
+
 export const EXAMPLE_PROJECTS: readonly ExampleProjectDefinition[] = [
+  { id: "adaptive-research", name: "Adaptive research · 4 / 7 / 5 blocks", description: "Scope → API + MCP evidence gathering → review and formatting. Different blocks for different tasks; example endpoints need setup.", build: buildAdaptiveResearch },
   { id: "parallel-workflow", name: "Parallel workflow + recovery", description: "Two parallel tasks, a joined result, and an A1 recovery route.", build: buildParallelWorkflow },
   { id: "sandboxed-agent", name: "Sandboxed agent", description: "Task → model + approved API tools → isolated agent → result.", build: buildSandboxedAgent },
   { id: "mcp-server", name: "MCP server", description: "API tools, resources, and prompts → sandboxed MCP server.", build: buildMcpServer },

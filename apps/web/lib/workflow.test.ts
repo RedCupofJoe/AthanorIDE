@@ -4,6 +4,7 @@ import { createNodeFromDefinition } from "@athanor/node-definitions";
 import { buildExampleProject } from "./example-projects";
 import {
   createWorkflowTask,
+  workflowEndTasks,
   disconnectedCandidates,
   optionalPortCandidates,
   pruneOptionalPorts,
@@ -162,5 +163,23 @@ describe("safe pruning", () => {
     expect(disconnectedCandidates(graph, task.id).map((n) => n.id)).toEqual([
       orphan.id,
     ]);
+  });
+});
+
+
+describe("SME End node", () => {
+  it("collects reachable normal leaves and excludes recovery and unconnected tasks", () => {
+    const graph = createEmptyGraph();
+    graph.workflow.tasks = [0, 1, 2, 3, 4].map(createWorkflowTask);
+    const [a, b, join, recovery] = graph.workflow.tasks;
+    graph.workflow.transitions = [
+      { id: "a", sourceTaskId: null, targetTaskId: a!.id, kind: "normal", stage: 1, recoveryDescription: "" },
+      { id: "b", sourceTaskId: null, targetTaskId: b!.id, kind: "normal", stage: 1, recoveryDescription: "" },
+      { id: "join", sourceTaskId: a!.id, targetTaskId: join!.id, kind: "normal", stage: 2, recoveryDescription: "" },
+      { id: "recover", sourceTaskId: a!.id, targetTaskId: recovery!.id, kind: "recovery", stage: 1, recoveryDescription: "Recover" },
+    ];
+    expect(workflowEndTasks(graph.workflow).map(t => t.id)).toEqual([b!.id, join!.id]);
+    graph.workflow.transitions = [];
+    expect(workflowEndTasks(graph.workflow)).toEqual([]);
   });
 });

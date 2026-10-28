@@ -1,4 +1,4 @@
-"""HTTP routes for the in-app assistant. The model token is read from the vault."""
+"""HTTP routes for the in-app assistant, with optional vault authentication."""
 
 from __future__ import annotations
 
@@ -20,12 +20,16 @@ Loopback = Annotated[None, Depends(require_loopback)]
 class AssistantWorkflow(BaseModel):
     tasks: list[dict[str, Any]] = Field(default_factory=list)
     transitions: list[dict[str, Any]] = Field(default_factory=list)
+    input: str = ""
+    availableTools: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DraftRequest(BaseModel):
     endpoint: str
     model: str = "assistant"
+    use_token: bool = Field(default=True, alias="useToken")
     workflow: AssistantWorkflow
+    target_task_ids: list[str] | None = Field(default=None, alias="targetTaskIds")
 
 
 class Passage(BaseModel):
@@ -36,6 +40,7 @@ class Passage(BaseModel):
 class AskRequest(BaseModel):
     endpoint: str
     model: str = "assistant"
+    use_token: bool = Field(default=True, alias="useToken")
     question: str
     passages: list[Passage] = Field(default_factory=list)
 
@@ -50,13 +55,14 @@ async def draft_architecture(body: DraftRequest, _: Loopback) -> dict[str, Any]:
     if not endpoint:
         raise HTTPException(status_code=400, detail="Set the assistant model endpoint.")
     try:
-        token = require_assistant_token()
+        token = require_assistant_token() if body.use_token else ""
         return await anyio.to_thread.run_sync(
             lambda: generate_draft(
                 endpoint=endpoint,
                 model=body.model.strip() or "assistant",
                 workflow=body.workflow.model_dump(),
                 token=token,
+                target_task_ids=body.target_task_ids,
             )
         )
     except AssistantError as exc:
@@ -74,7 +80,7 @@ async def ask_assistant(body: AskRequest, _: Loopback) -> dict[str, str]:
     if not question:
         raise HTTPException(status_code=400, detail="Enter a question.")
     try:
-        token = require_assistant_token()
+        token = require_assistant_token() if body.use_token else ""
         answer = await anyio.to_thread.run_sync(
             lambda: answer_question(
                 endpoint=endpoint,

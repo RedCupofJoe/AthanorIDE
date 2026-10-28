@@ -111,3 +111,12 @@ export function StartNode() {
     </div>
   );
 }
+
+export function EndNode() {
+  return (
+    <div className="rounded-full border-4 border-emerald-800 bg-emerald-700 px-5 py-3 font-semibold text-white" title="Workflow completes after all normal branches finish. Recovery results resume their original branch.">
+      End
+      <Handle id="in" type="target" position={Position.Left} isConnectable={false} style={{ width: 14, height: 14 }} />
+    </div>
+  );
+}

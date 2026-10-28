@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Endpoint preference and a write-only vault token. The stored token is never shown.
+ * Endpoint preferences and optional write-only vault authentication.
  */
 import { useEffect, useState } from "react";
 
@@ -16,10 +16,13 @@ type AssistantSettingsProps = {
 export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
   const endpoint = useUiPreferencesStore((state) => state.assistantEndpoint);
   const model = useUiPreferencesStore((state) => state.assistantModel);
+  const useToken = useUiPreferencesStore((state) => state.assistantUseToken);
   const setAssistantEndpoint = useUiPreferencesStore((state) => state.setAssistantEndpoint);
   const setAssistantModel = useUiPreferencesStore((state) => state.setAssistantModel);
+  const setAssistantUseToken = useUiPreferencesStore((state) => state.setAssistantUseToken);
   const [endpointDraft, setEndpointDraft] = useState(endpoint);
   const [modelDraft, setModelDraft] = useState(model);
+  const [useTokenDraft, setUseTokenDraft] = useState(useToken);
   const [tokenDraft, setTokenDraft] = useState("");
   const [stored, setStored] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -28,9 +31,11 @@ export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
   useEffect(() => {
     setEndpointDraft(endpoint);
     setModelDraft(model);
-  }, [endpoint, model]);
+    setUseTokenDraft(useToken);
+  }, [endpoint, model, useToken]);
 
   useEffect(() => {
+    if (!useTokenDraft) return;
     let current = true;
     void (async () => {
       try {
@@ -48,14 +53,16 @@ export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
     return () => {
       current = false;
     };
-  }, [message]);
+  }, [message, useTokenDraft]);
 
   const save = async () => {
     setError(null);
     setMessage(null);
     setAssistantEndpoint(endpointDraft.trim());
     setAssistantModel(modelDraft.trim() || "assistant");
-    if (!tokenDraft.trim()) {
+    setAssistantUseToken(useTokenDraft);
+    if (!useTokenDraft || !tokenDraft.trim()) {
+      setTokenDraft("");
       setMessage("Endpoint saved.");
       return;
     }
@@ -105,19 +112,44 @@ export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
           autoComplete="off"
         />
       </label>
-      <label className="block space-y-1">
-        <span className="font-medium">Token</span>
+      <label className="flex cursor-pointer items-center justify-between gap-3">
+        <span className="font-medium">Use API token</span>
         <input
-          aria-label="Assistant token"
-          className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1"
-          type="password"
-          value={tokenDraft}
-          onChange={(event) => setTokenDraft(event.target.value)}
-          placeholder="Write-only"
-          autoComplete="new-password"
+          type="checkbox"
+          role="switch"
+          aria-label="Use API token"
+          className="peer sr-only"
+          checked={useTokenDraft}
+          onChange={(event) => {
+            setUseTokenDraft(event.target.checked);
+            setTokenDraft("");
+            setError(null);
+            setMessage(null);
+          }}
+        />
+        <span
+          aria-hidden="true"
+          className="relative h-5 w-9 shrink-0 rounded-full bg-slate-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-[var(--athanor-ink)] peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--athanor-ink)] peer-focus-visible:ring-offset-2"
         />
       </label>
-      <p className="text-xs text-[var(--athanor-slate)]">{assistantTokenStatus(stored)}</p>
+      <p className="text-xs text-[var(--athanor-slate)]">
+        Turn off for local or other endpoints that do not require authentication.
+      </p>
+      {useTokenDraft && (
+        <label className="block space-y-1">
+          <span className="font-medium">Token</span>
+          <input
+            aria-label="Assistant token"
+            className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1"
+            type="password"
+            value={tokenDraft}
+            onChange={(event) => setTokenDraft(event.target.value)}
+            placeholder="Write-only"
+            autoComplete="new-password"
+          />
+        </label>
+      )}
+      <p className="text-xs text-[var(--athanor-slate)]">{assistantTokenStatus(stored, useTokenDraft)}</p>
       {message && <p className="text-xs text-[var(--athanor-slate)]">{message}</p>}
       {error && (
         <p className="text-xs text-red-700">

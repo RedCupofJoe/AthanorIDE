@@ -327,7 +327,7 @@ export function WorkflowInspector() {
     <aside aria-label="Workflow overview" className="space-y-3 p-4">
       <h2 className="font-semibold">Workflow overview</h2>
       <p className="text-xs text-slate-600">
-        Draw task boxes, define their briefs, and connect Start to stage 1.
+        Draw task boxes, define their briefs, and connect Start to stage 1. Final normal branches automatically connect to End; completion waits for all branches.
         Select a connection to edit its stage or recovery path.
       </p>
       <BriefField
